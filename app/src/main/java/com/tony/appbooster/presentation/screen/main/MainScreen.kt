@@ -20,12 +20,13 @@ import com.tony.appbooster.R
 import com.tony.appbooster.presentation.navigation.Screen
 import com.tony.appbooster.presentation.screen.dashboard.DashboardScreen
 import com.tony.appbooster.presentation.screen.settings.SettingsScreen
+import com.tony.appbooster.presentation.screen.watch.WatchScreen
 import com.tony.appbooster.presentation.viewmodel.main.MainViewModel
 
 @Composable
 fun MainAppScreen(viewModel: MainViewModel) {
     val bottomNavController = rememberNavController()
-    val items = listOf(Screen.Dashboard, Screen.Settings)
+    val items = listOf(Screen.Dashboard, Screen.Watch, Screen.Settings)
 
     Scaffold(
         bottomBar = {
@@ -37,6 +38,7 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     val label = when (screen) {
                         Screen.Dashboard -> stringResource(R.string.nav_dashboard)
                         Screen.Settings -> stringResource(R.string.nav_settings)
+                        Screen.Watch -> "Watch"
                         else -> ""
                     }
 
@@ -65,6 +67,9 @@ fun MainAppScreen(viewModel: MainViewModel) {
         ) {
             composable(Screen.Dashboard.route) {
                 DashboardScreen(viewModel)
+            }
+            composable(Screen.Watch.route) {
+                WatchScreen()
             }
             composable(Screen.Settings.route) {
                 SettingsScreen()

@@ -88,8 +88,12 @@ dependencies {
     // DataStore for settings persistence
     implementation(libs.androidx.datastore.preferences)
 
-    // dadb - Pure Kotlin ADB client (KEY for self-connection!)
+    // dadb - Pure Kotlin ADB client (fallback for self-connection)
     implementation(libs.dadb)
+
+    // Wearable Data Layer - for phone communication (bridge mode)
+    implementation(libs.play.services.wearable)
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // Testing
     testImplementation(libs.junit)

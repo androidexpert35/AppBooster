@@ -26,6 +26,7 @@ wearComposeMaterial3 = "1.0.0-alpha32"
 wearTiles = "1.4.1"
 horologist = "0.6.20"
 playServicesWearable = "18.2.0"
+coroutines = "1.8.1"
 
 [libraries]
 dadb = { module = "dev.mobile:dadb", version.ref = "dadb" }
@@ -75,6 +76,7 @@ wear-tiles-material = { group = "androidx.wear.tiles", name = "tiles-material", 
 horologist-compose-layout = { group = "com.google.android.horologist", name = "horologist-compose-layout", version.ref = "horologist" }
 horologist-compose-material = { group = "com.google.android.horologist", name = "horologist-compose-material", version.ref = "horologist" }
 play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
+kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
