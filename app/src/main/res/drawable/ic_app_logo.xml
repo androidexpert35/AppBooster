@@ -1,0 +1,37 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+  <!-- Outer glow/speed lines (Optional, subtle) -->
+  <path
+      android:pathData="M12,2.5L14.5,7H9.5L12,2.5Z"
+      android:fillColor="#1976D2"/> <!-- Darker Blue tip -->
+
+  <!-- Main Rocket Body -->
+  <path
+      android:pathData="M14.5,7C14.5,7 16,15 16,17C16,18.5 15,19 14,19H10C9,19 8,18.5 8,17C8,15 9.5,7 9.5,7H14.5Z"
+      android:fillColor="#2196F3"/> <!-- Primary Blue -->
+
+  <!-- Window -->
+  <path
+      android:pathData="M12,10C12.83,10 13.5,10.67 13.5,11.5C13.5,12.33 12.83,13 12,13C11.17,13 10.5,12.33 10.5,11.5C10.5,10.67 11.17,10 12,10Z"
+      android:fillColor="#FFFFFF"/>
+
+  <!-- Wings -->
+  <path
+      android:pathData="M8,15L5,19H8V15ZM16,15V19H19L16,15Z"
+      android:fillColor="#1565C0"/> <!-- Dark Blue Wings -->
+
+  <!-- Flame Core -->
+  <path
+      android:pathData="M10,19L12,23L14,19H10Z"
+      android:fillColor="#FFC107"/> <!-- Amber -->
+
+  <!-- Flame Outer -->
+  <path
+      android:pathData="M11,19L12,21.5L13,19H11Z"
+      android:fillColor="#FF5722"/> <!-- Deep Orange -->
+
+</vector>
