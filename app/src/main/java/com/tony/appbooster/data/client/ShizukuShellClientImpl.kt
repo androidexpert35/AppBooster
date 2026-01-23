@@ -74,20 +74,20 @@ class ShizukuShellClientImpl @Inject constructor(
     private val binderDeadListener = Shizuku.OnBinderDeadListener {
         Log.d(TAG, "Shizuku binder dead")
         shellService = null
-        _state.value = ShizukuState.NotRunning
+        // Recompute state instead of forcing a value, so we don't mask "NotInstalled" etc.
+        updateState()
     }
 
     private val permissionResultListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
         val granted = grantResult == PackageManager.PERMISSION_GRANTED
         Log.d(TAG, "Permission result received: requestCode=$requestCode, granted=$granted")
         if (requestCode == PERMISSION_REQUEST_CODE) {
-            if (granted) {
-                Log.i(TAG, "Shizuku permission granted!")
-                _state.value = ShizukuState.Ready
+            // Recompute state using live checks (binder may have died while the dialog was open).
+            updateState()
+
+            // If permission was granted and we're truly ready, bind the user service.
+            if (granted && _state.value == ShizukuState.Ready) {
                 bindShellService()
-            } else {
-                Log.w(TAG, "Shizuku permission denied")
-                _state.value = ShizukuState.PermissionRequired
             }
         }
     }
@@ -106,27 +106,68 @@ class ShizukuShellClientImpl @Inject constructor(
     }
 
     private fun updateState() {
-        val isInstalled = isShizukuInstalled()
-        val isBinderAlive = try { Shizuku.pingBinder() } catch (e: Exception) {
-            Log.e(TAG, "Error pinging binder", e)
-            false
+        val newState = computeStateSafely()
+        if (_state.value != newState) {
+            Log.d(TAG, "Shizuku state updated: ${_state.value} -> $newState")
         }
-        val hasPerms = if (isBinderAlive) hasPermission() else false
+        _state.value = newState
 
-        Log.d(TAG, "updateState: installed=$isInstalled, binderAlive=$isBinderAlive, hasPermission=$hasPerms")
-
-        _state.value = when {
-            !isInstalled -> ShizukuState.NotInstalled
-            !isBinderAlive -> ShizukuState.NotRunning
-            !hasPerms -> ShizukuState.PermissionRequired
-            else -> ShizukuState.Ready
+        // Keep the user service binding consistent with state to avoid stale "Ready" behavior.
+        if (newState == ShizukuState.Ready) {
+            if (shellService == null) {
+                bindShellService()
+            }
+        } else {
+            shellService = null
+            unbindShellService()
         }
-        Log.d(TAG, "Shizuku state updated: ${_state.value}")
+    }
 
-        // Bind/unbind service based on state
-        if (_state.value == ShizukuState.Ready && shellService == null) {
-            bindShellService()
+    /**
+     * Computes the current Shizuku availability state.
+     *
+     * The ordering is important:
+     * 1) Not installed
+     * 2) Installed but server not running (binder not alive)
+     * 3) Server running but permission missing
+     * 4) Ready
+     */
+    private fun computeStateSafely(): ShizukuState {
+        val installed = isShizukuInstalled()
+        if (!installed) return ShizukuState.NotInstalled
+
+        val binderAlive = isBinderAlive()
+        if (!binderAlive) return ShizukuState.NotRunning
+
+        // If the binder is alive, Shizuku is running. Now check permission.
+        val granted = hasPermissionWhenBinderAlive()
+        return if (granted) ShizukuState.Ready else ShizukuState.PermissionRequired
+    }
+
+    private fun isBinderAlive(): Boolean {
+        return runCatching { Shizuku.pingBinder() }
+            .onFailure { e -> Log.w(TAG, "Failed to ping Shizuku binder", e) }
+            .getOrDefault(false)
+    }
+
+    /**
+     * Checks whether this app currently has Shizuku permission.
+     *
+     * This method must only be called when the binder is alive; otherwise, Shizuku APIs can
+     * throw or return misleading values.
+     */
+    private fun hasPermissionWhenBinderAlive(): Boolean {
+        return runCatching {
+            if (Shizuku.isPreV11()) {
+                // AppBooster requires the v11+ runtime-permission workflow. For older Shizuku,
+                // treat as permission missing so UI can guide the user to update.
+                false
+            } else {
+                Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+            }
         }
+            .onFailure { e -> Log.w(TAG, "Failed to check Shizuku permission", e) }
+            .getOrDefault(false)
     }
 
     private fun bindShellService() {
@@ -155,67 +196,39 @@ class ShizukuShellClientImpl @Inject constructor(
         }
     }
 
-    private fun hasPermission(): Boolean {
-        return try {
-            if (Shizuku.isPreV11()) {
-                Log.d(TAG, "Shizuku is pre-v11, using legacy permission check")
-                // For pre-v11, check if we can ping binder - if yes, we have permission
-                false
-            } else {
-                val result = Shizuku.checkSelfPermission()
-                val granted = result == PackageManager.PERMISSION_GRANTED
-                Log.d(TAG, "Shizuku permission check result: $result (granted=$granted)")
-                granted
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error checking Shizuku permission", e)
-            false
-        }
-    }
-
     override suspend fun requestPermission() {
         Log.d(TAG, "requestPermission() called")
 
-        // Check if Shizuku binder is alive
-        val binderAlive = try {
-            Shizuku.pingBinder()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error pinging Shizuku binder", e)
-            false
+        if (!isShizukuInstalled()) {
+            _state.value = ShizukuState.NotInstalled
+            return
         }
 
+        // Check if Shizuku server is running (binder alive). If not, we can't request permission.
+        val binderAlive = isBinderAlive()
         if (!binderAlive) {
             Log.w(TAG, "Shizuku binder not alive, cannot request permission")
             _state.value = ShizukuState.NotRunning
             return
         }
 
-        // Check if already have permission
-        if (hasPermission()) {
+        // Check if already have permission.
+        if (hasPermissionWhenBinderAlive()) {
             Log.d(TAG, "Already have Shizuku permission")
             _state.value = ShizukuState.Ready
+            bindShellService()
             return
         }
 
-        // For Shizuku 11+, we use the new permission request API
         if (Shizuku.isPreV11()) {
             Log.w(TAG, "Shizuku version is pre-v11, not supported")
             _state.value = ShizukuState.Error("Shizuku version too old. Please update Shizuku.")
             return
         }
 
-        // Get Shizuku version for debugging
-        try {
-            val version = Shizuku.getVersion()
-            Log.d(TAG, "Shizuku version: $version")
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not get Shizuku version", e)
-        }
-
         Log.d(TAG, "Requesting Shizuku permission with request code: $PERMISSION_REQUEST_CODE")
 
         try {
-            // Request permission - this should trigger Shizuku to show a dialog
             Shizuku.requestPermission(PERMISSION_REQUEST_CODE)
             Log.d(TAG, "Permission request sent to Shizuku successfully")
         } catch (e: Exception) {

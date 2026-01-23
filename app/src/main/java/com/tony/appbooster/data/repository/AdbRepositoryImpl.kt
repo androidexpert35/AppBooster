@@ -295,6 +295,13 @@ class AdbRepositoryImpl @Inject constructor(
                         }
                     }
                 }
+
+                if (packages.isEmpty()) {
+                    // Helps diagnose scenarios where the shell command succeeded but returned unexpected output.
+                    addLog("pm list packages returned no parsable packages. Raw output (first 500 chars):")
+                    addLog(output.take(500))
+                }
+
                 packages
             },
             onFailure = { throwable ->
