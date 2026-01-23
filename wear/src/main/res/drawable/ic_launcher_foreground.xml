@@ -1,0 +1,23 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Rocket icon -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,24
+                         C54,24 44,34 44,54
+                         C44,64 48,72 54,78
+                         C60,72 64,64 64,54
+                         C64,34 54,24 54,24Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,62 L38,68 L44,74 L44,62Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,62 L70,68 L64,74 L64,62Z"/>
+    <path
+        android:fillColor="#FF5722"
+        android:pathData="M50,78 L54,88 L58,78 C56,80 52,80 50,78Z"/>
+</vector>

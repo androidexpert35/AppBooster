@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">AppBooster</string>
+    <string name="tile_label">Optimize</string>
+    <string name="start_optimization">Start Optimization</string>
+    <string name="stop_optimization">Stop</string>
+    <string name="optimization_complete">Optimization Complete</string>
+    <string name="adb_not_connected">ADB Not Connected</string>
+    <string name="setup_required">Setup Required</string>
+    <string name="pairing_title">ADB Pairing</string>
+    <string name="pairing_port">Pairing Port</string>
+    <string name="pairing_code">Pairing Code</string>
+    <string name="connect_port">Connection Port</string>
+    <string name="pair_button">Pair</string>
+    <string name="connect_button">Connect</string>
+    <string name="connected">Connected</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="optimizing">Optimizing…</string>
+    <string name="apps_optimized">%1$d / %2$d apps</string>
+</resources>

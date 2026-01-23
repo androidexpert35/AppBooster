@@ -21,6 +21,11 @@ androidx-datastore = "1.1.1"
 ddmlib = "31.5.0"
 dadb = "1.2.10"
 shizuku = "13.1.5"
+wearCompose = "1.4.0"
+wearComposeMaterial3 = "1.0.0-alpha32"
+wearTiles = "1.4.1"
+horologist = "0.6.20"
+playServicesWearable = "18.2.0"
 
 [libraries]
 dadb = { module = "dev.mobile:dadb", version.ref = "dadb" }
@@ -60,6 +65,16 @@ androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", vers
 
 # DataStore
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "androidx-datastore" }
+
+# Wear OS
+wear-compose-foundation = { group = "androidx.wear.compose", name = "compose-foundation", version.ref = "wearCompose" }
+wear-compose-material3 = { group = "androidx.wear.compose", name = "compose-material3", version.ref = "wearComposeMaterial3" }
+wear-compose-navigation = { group = "androidx.wear.compose", name = "compose-navigation", version.ref = "wearCompose" }
+wear-tiles = { group = "androidx.wear.tiles", name = "tiles", version.ref = "wearTiles" }
+wear-tiles-material = { group = "androidx.wear.tiles", name = "tiles-material", version.ref = "wearTiles" }
+horologist-compose-layout = { group = "com.google.android.horologist", name = "horologist-compose-layout", version.ref = "horologist" }
+horologist-compose-material = { group = "com.google.android.horologist", name = "horologist-compose-material", version.ref = "horologist" }
+play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "AppBooster"
 include(":app")
+include(":wear")
