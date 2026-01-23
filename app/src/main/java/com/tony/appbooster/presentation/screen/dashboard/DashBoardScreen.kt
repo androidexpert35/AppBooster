@@ -91,6 +91,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.schedapp.presentation.screen.common.basescreen.ErrorDialogConfig
 import com.tony.appbooster.R
 import com.tony.appbooster.domain.model.common.OptimizationResult
 import com.tony.appbooster.domain.model.settings.AppOptimizationType
@@ -146,7 +147,12 @@ fun DashboardScreen(viewModel: MainViewModel) {
         }
     }
 
-    AppBaseScreen(uiState = uiState) { model ->
+    AppBaseScreen(
+        uiState = uiState,
+        errorDialogConfig = ErrorDialogConfig(
+            onCancel = { viewModel.showErrorPopup(false) }
+        )
+    ) { model ->
         DashboardContent(
             model = model,
             onStartOptimization = {

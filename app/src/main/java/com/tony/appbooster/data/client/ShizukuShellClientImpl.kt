@@ -15,6 +15,7 @@ import com.tony.appbooster.domain.model.shizuku.ShellResult
 import com.tony.appbooster.domain.model.shizuku.ShizukuState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,6 +44,7 @@ class ShizukuShellClientImpl @Inject constructor(
     private val _state = MutableStateFlow<ShizukuState>(ShizukuState.NotRunning)
     override val state: StateFlow<ShizukuState> = _state.asStateFlow()
 
+    @Volatile
     private var shellService: IShellService? = null
     private val serviceMutex = Mutex()
 
@@ -239,12 +241,44 @@ class ShizukuShellClientImpl @Inject constructor(
 
     override fun isReady(): Boolean = _state.value == ShizukuState.Ready
 
-    override suspend fun execute(command: String): ShellResult = withContext(ioDispatcher) {
-        serviceMutex.withLock {
-            if (!isReady()) {
-                throw IllegalStateException("Shizuku is not ready. Current state: ${_state.value}")
-            }
+    /**
+     * Waits for the shell service to be bound and ready.
+     *
+     * @param timeoutMs Maximum time to wait in milliseconds.
+     * @return true if service is connected, false on timeout.
+     */
+    private suspend fun waitForServiceConnection(timeoutMs: Long = 2000): Boolean {
+        val startTime = System.currentTimeMillis()
+        while (shellService == null && (System.currentTimeMillis() - startTime) < timeoutMs) {
+            delay(50)
+        }
+        return shellService != null
+    }
 
+    override suspend fun execute(command: String): ShellResult = withContext(ioDispatcher) {
+        if (!isReady()) {
+            throw IllegalStateException("Shizuku is not ready. Current state: ${_state.value}")
+        }
+
+        // If service is null (e.g. fresh start or race condition), try to bind and wait.
+        if (shellService == null) {
+            bindShellService()
+            val connected = waitForServiceConnection()
+            if (!connected) {
+                // Double-check permission status if binding fails
+                updateState()
+                if (!isReady()) {
+                    throw IllegalStateException("Shizuku permission or state invalid during connection.")
+                }
+                return@withContext ShellResult(
+                    exitCode = -1,
+                    output = "",
+                    error = "Shizuku service binding timed out. Please ensure Shizuku is running and permission is granted."
+                )
+            }
+        }
+
+        serviceMutex.withLock {
             Log.d(TAG, "Executing command: $command")
 
             val service = shellService
@@ -258,7 +292,8 @@ class ShizukuShellClientImpl @Inject constructor(
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Command execution via service failed", e)
-                    // Fallback or retry binding
+                    // Fallback cleanup
+                    shellService = null
                     bindShellService()
                     ShellResult(
                         exitCode = -1,
@@ -267,12 +302,10 @@ class ShizukuShellClientImpl @Inject constructor(
                     )
                 }
             } else {
-                // Service not yet connected, try to bind
-                bindShellService()
                 ShellResult(
                     exitCode = -1,
                     output = "",
-                    error = "ShellService not connected. Please try again."
+                    error = "ShellService lost unexpectedly."
                 )
             }
         }

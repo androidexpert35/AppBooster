@@ -52,7 +52,7 @@ class AdbShellClientImpl @Inject constructor(
             }
             ShizukuState.NotRunning -> {
                 throw IllegalStateException(
-                    "Shizuku service is not running. Please start it via ADB or root access."
+                    "Shizuku service is not running. Please start it via shizuku app"
                 )
             }
             ShizukuState.PermissionRequired -> {
