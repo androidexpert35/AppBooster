@@ -212,8 +212,10 @@ class AdbRepositoryImpl @Inject constructor(
                 result.fold(
                     onSuccess = { output ->
                         addLog("Success: optimized $packageName")
-                        if (output.isNotBlank()) {
-                            addLog(output.trim())
+                        // Only log output if it contains more info than just "Success"
+                        val trimmed = output.trim()
+                        if (trimmed.isNotBlank() && !trimmed.equals("Success", ignoreCase = true)) {
+                            addLog(trimmed)
                         }
                     },
                     onFailure = { throwable ->
