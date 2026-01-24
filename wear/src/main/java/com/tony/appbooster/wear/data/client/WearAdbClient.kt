@@ -2,6 +2,7 @@ package com.tony.appbooster.wear.data.client
 
 import android.content.Context
 import android.util.Log
+import com.tony.appbooster.wear.data.client.pairing.AdbPairingClient
 import com.tony.appbooster.wear.domain.model.AdbConnectionState
 import dadb.AdbKeyPair
 import dadb.Dadb
@@ -52,13 +53,9 @@ class WearAdbClient @Inject constructor(
     /**
      * Pairs with the local ADB daemon using the provided pairing code.
      *
-     * This uses Android 11+ wireless debugging pairing protocol.
+     * This uses Android 11+ wireless debugging pairing protocol (SPAKE2+).
      * The pairing is a one-time operation; after successful pairing,
      * the RSA key is trusted and future connections don't need pairing.
-     *
-     * Note: dadb library may not directly support ADB pairing protocol.
-     * For now, this stores the pairing intent and requires manual pairing
-     * via adb pair command or the Wireless Debugging settings.
      *
      * @param port The pairing port shown in Wireless Debugging settings.
      * @param pairingCode The 6-digit pairing code.
@@ -66,23 +63,35 @@ class WearAdbClient @Inject constructor(
      */
     suspend fun pair(port: Int, pairingCode: String): Result<Unit> = withContext(ioDispatcher) {
         try {
-            Log.d(TAG, "Storing pairing configuration for port $port")
+            Log.d(TAG, "Starting SPAKE2+ pairing on port $port")
 
             // Generate and store the key pair if not exists
-            getOrCreateKeyPair()
+            val keyPair = getOrCreateKeyPair()
 
-            // Note: True ADB pairing requires the PAKE protocol which dadb doesn't support directly.
-            // The workaround is to:
-            // 1. Have user pair via `adb pair localhost:port code` from a connected device, OR
-            // 2. Use the system's pairing which stores keys in /data/misc/adb/adb_keys
+            // Perform real SPAKE2+ pairing
+            val pairingClient = AdbPairingClient(ioDispatcher)
+            val result = pairingClient.pair(
+                host = LOCALHOST,
+                port = port,
+                pairingCode = pairingCode,
+                keyPair = keyPair
+            )
 
-            // For now, we mark as "paired" and attempt connection -
-            // if the user has paired via Wireless Debugging UI, it should work
-            storePairingSuccess()
-            Log.d(TAG, "Pairing configuration stored")
-            Result.success(Unit)
+            when (result) {
+                is AdbPairingClient.PairingResult.Success -> {
+                    Log.d(TAG, "Pairing successful with device: ${result.deviceName}")
+                    storePairingSuccess()
+                    Result.success(Unit)
+                }
+                is AdbPairingClient.PairingResult.Failure -> {
+                    Log.e(TAG, "Pairing failed: ${result.error}", result.exception)
+                    Result.failure(
+                        result.exception ?: Exception(result.error)
+                    )
+                }
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Pairing configuration failed", e)
+            Log.e(TAG, "Pairing failed", e)
             Result.failure(e)
         }
     }

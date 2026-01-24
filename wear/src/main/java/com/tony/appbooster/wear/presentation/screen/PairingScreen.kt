@@ -166,15 +166,38 @@ private fun PairingWizard(
             STEP_INSTRUCTIONS -> {
                 item {
                     Text(
-                        text = "Setup",
+                        text = "ADB Setup",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
 
+                item { Spacer(modifier = Modifier.height(12.dp)) }
+
+                // Option 1: Already paired
                 item {
                     Text(
-                        text = "Step 1 of 2",
+                        text = "If already paired:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                item {
+                    Button(
+                        onClick = onSkipPairing,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Skip to Connect")
+                    }
+                }
+
+                item { Spacer(modifier = Modifier.height(16.dp)) }
+
+                item {
+                    Text(
+                        text = "— First time setup —",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -184,7 +207,7 @@ private fun PairingWizard(
 
                 item {
                     Text(
-                        text = "⚠️ Read carefully!",
+                        text = "⚠️ Important:",
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.error,
                         textAlign = TextAlign.Center
@@ -193,7 +216,7 @@ private fun PairingWizard(
 
                 item {
                     Text(
-                        text = "The pairing code will disappear when you return here. You must MEMORIZE or WRITE DOWN both values:",
+                        text = "The pairing dialog will CLOSE when you return here. Write down both values BEFORE coming back!",
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -201,25 +224,25 @@ private fun PairingWizard(
                     )
                 }
 
-                item { Spacer(modifier = Modifier.height(4.dp)) }
+                item { Spacer(modifier = Modifier.height(8.dp)) }
 
                 item {
                     Text(
-                        text = "1️⃣ Pairing Port (5 digits)\n2️⃣ Pairing Code (6 digits)",
+                        text = "Go to: Settings → Developer Options → Wireless Debugging → Pair new device",
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
-                item { Spacer(modifier = Modifier.height(8.dp)) }
+                item { Spacer(modifier = Modifier.height(4.dp)) }
 
                 item {
                     Text(
-                        text = "Go to:\nSettings → Developer Options → Wireless Debugging → Pair new device",
+                        text = "Write down:\n• Port (5 digits)\n• Code (6 digits)",
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
@@ -230,22 +253,11 @@ private fun PairingWizard(
                         onClick = { onStepChange(STEP_ENTER_PAIRING) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("I have the values")
+                        Text("I wrote them down")
                         Icon(
                             Icons.AutoMirrored.Rounded.ArrowForward,
                             contentDescription = null,
                             modifier = Modifier.padding(start = 8.dp)
-                        )
-                    }
-                }
-
-                item {
-                    TextButton(
-                        onClick = onSkipPairing
-                    ) {
-                        Text(
-                            text = "Already paired via PC",
-                            style = MaterialTheme.typography.bodySmall
                         )
                     }
                 }
@@ -260,19 +272,11 @@ private fun PairingWizard(
                     )
                 }
 
-                item {
-                    Text(
-                        text = "Step 1 of 2",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
                 item { Spacer(modifier = Modifier.height(8.dp)) }
 
                 item {
                     Text(
-                        text = "Enter: PORT CODE\n(e.g., 37845 482916)",
+                        text = "Enter the values you wrote down:",
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -359,17 +363,9 @@ private fun PairingWizard(
 
                 item {
                     Text(
-                        text = "Paired!",
+                        text = if (uiState.pairingSuccess) "Ready!" else "Connect",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                item {
-                    Text(
-                        text = "Step 2 of 2",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -377,7 +373,7 @@ private fun PairingWizard(
 
                 item {
                     Text(
-                        text = "Now enter the CONNECTION port from the main Wireless Debugging screen (not the pairing port!)",
+                        text = "Enter the CONNECTION port shown on the main Wireless Debugging screen.\n\n(This is different from the pairing port!)",
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

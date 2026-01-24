@@ -91,6 +91,9 @@ dependencies {
     // dadb - Pure Kotlin ADB client (fallback for self-connection)
     implementation(libs.dadb)
 
+    // BouncyCastle - for SPAKE2+ ADB pairing protocol
+    implementation(libs.bouncycastle)
+
     // Wearable Data Layer - for phone communication (bridge mode)
     implementation(libs.play.services.wearable)
     implementation(libs.kotlinx.coroutines.play.services)

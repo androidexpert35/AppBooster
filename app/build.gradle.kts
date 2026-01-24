@@ -93,6 +93,9 @@ dependencies {
 
     // adb
     implementation(libs.dadb)
+    implementation(libs.bouncycastle)
+    testImplementation(libs.adam)
+    testImplementation(libs.ddmlib)
 
     // Shizuku - for privileged shell access
     implementation(libs.shizuku.api)

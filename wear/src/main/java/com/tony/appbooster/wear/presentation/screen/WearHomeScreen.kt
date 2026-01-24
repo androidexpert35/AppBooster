@@ -85,46 +85,77 @@ private fun WearHomeContent(
         contentAlignment = Alignment.Center
     ) {
         AnimatedContent(
-            targetState = uiState.connectionState,
+            targetState = uiState,
             transitionSpec = {
                 fadeIn(animationSpec = tween(300)) togetherWith
                         fadeOut(animationSpec = tween(200))
             },
-            label = "connection_state"
-        ) { connectionState ->
+            contentKey = { state ->
+                // Use a key that represents the main display state
+                when {
+                    state.optimizationProgress.isRunning -> "running"
+                    state.optimizationProgress.result == OptimizationResult.Completed -> "complete"
+                    state.isLoading -> "loading"
+                    state.isUsingPhoneBridge && state.isPhoneAdbReady -> "phone_ready"
+                    state.isUsingPhoneBridge && state.isPhoneConnected -> "phone_connected"
+                    state.isUsingPhoneBridge -> "waiting_phone"
+                    state.connectionState == AdbConnectionState.Connected -> "local_ready"
+                    state.needsSetup -> "setup"
+                    state.errorMessage != null -> "error"
+                    else -> "disconnected"
+                }
+            },
+            label = "home_state"
+        ) { state ->
             when {
-                uiState.needsSetup -> {
-                    SetupRequiredContent(onNavigateToPairing = onNavigateToPairing)
+                state.optimizationProgress.isRunning -> {
+                    OptimizingContent(
+                        progress = state.optimizationProgress.progress,
+                        currentPackage = state.optimizationProgress.currentAppPackage,
+                        processedCount = state.optimizationProgress.processedCount,
+                        totalCount = state.optimizationProgress.totalCount,
+                        onCancel = onCancelOptimization
+                    )
                 }
-                connectionState == AdbConnectionState.Connected -> {
-                    if (uiState.optimizationProgress.isRunning) {
-                        OptimizingContent(
-                            progress = uiState.optimizationProgress.progress,
-                            currentPackage = uiState.optimizationProgress.currentAppPackage,
-                            processedCount = uiState.optimizationProgress.processedCount,
-                            totalCount = uiState.optimizationProgress.totalCount,
-                            onCancel = onCancelOptimization
-                        )
-                    } else if (uiState.optimizationProgress.result == OptimizationResult.Completed) {
-                        OptimizationCompleteContent(
-                            appsOptimized = uiState.optimizationProgress.totalCount,
-                            onStartAgain = onStartOptimization
-                        )
-                    } else {
-                        ReadyToOptimizeContent(
-                            selectedMode = uiState.selectedMode.name,
-                            onStart = onStartOptimization,
-                            onToggleMode = onToggleMode
-                        )
-                    }
+                state.optimizationProgress.result == OptimizationResult.Completed -> {
+                    OptimizationCompleteContent(
+                        appsOptimized = state.optimizationProgress.totalCount,
+                        onStartAgain = onStartOptimization
+                    )
                 }
-                connectionState == AdbConnectionState.Connecting ||
-                        uiState.isLoading -> {
+                state.isLoading -> {
                     ConnectingContent()
                 }
-                connectionState is AdbConnectionState.Error -> {
+                // Phone Bridge Mode - ADB Ready (can start optimization)
+                state.isUsingPhoneBridge && state.isPhoneAdbReady -> {
+                    PhoneReadyContent(
+                        selectedMode = state.selectedMode.name,
+                        onStart = onStartOptimization,
+                        onToggleMode = onToggleMode
+                    )
+                }
+                // Phone Bridge Mode - Phone connected but ADB not ready
+                state.isUsingPhoneBridge && state.isPhoneConnected -> {
+                    WaitingForPhoneSetupContent()
+                }
+                // Phone Bridge Mode - Waiting for phone
+                state.isUsingPhoneBridge -> {
+                    WaitingForPhoneContent()
+                }
+                // Local/Self-Connection Mode - Connected
+                state.connectionState == AdbConnectionState.Connected -> {
+                    ReadyToOptimizeContent(
+                        selectedMode = state.selectedMode.name,
+                        onStart = onStartOptimization,
+                        onToggleMode = onToggleMode
+                    )
+                }
+                state.needsSetup -> {
+                    SetupRequiredContent(onNavigateToPairing = onNavigateToPairing)
+                }
+                state.connectionState is AdbConnectionState.Error -> {
                     ErrorContent(
-                        message = connectionState.message,
+                        message = state.connectionState.message,
                         onRetry = onRetryConnection,
                         onSetup = onNavigateToPairing
                     )
@@ -161,14 +192,14 @@ private fun SetupRequiredContent(onNavigateToPairing: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "Pair with ADB to enable optimization",
+            text = "Use the phone app to connect, or tap below for manual setup",
             style = MaterialTheme.typography.bodySmall,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(12.dp))
         Button(onClick = onNavigateToPairing) {
-            Text("Setup")
+            Text("Manual Setup")
         }
     }
 }
@@ -213,6 +244,126 @@ private fun ReadyToOptimizeContent(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp)
+        )
+    }
+}
+
+/**
+ * Content shown when phone is connected and ADB is ready.
+ * This is the preferred phone bridge mode.
+ */
+@Composable
+private fun PhoneReadyContent(
+    selectedMode: String,
+    onStart: () -> Unit,
+    onToggleMode: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.CheckCircle,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = Color(0xFF4CAF50)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Phone Ready",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = "via ADB",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Large play button
+        Button(
+            onClick = onStart,
+            modifier = Modifier.size(72.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.PlayArrow,
+                contentDescription = "Start Optimization",
+                modifier = Modifier.size(36.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = selectedMode.replace("_", " "),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * Content shown when waiting for phone to complete ADB setup.
+ */
+@Composable
+private fun WaitingForPhoneSetupContent() {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier.padding(16.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Settings,
+            contentDescription = null,
+            modifier = Modifier.size(32.dp),
+            tint = MaterialTheme.colorScheme.tertiary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Setup on Phone",
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Open the Watch tab in the phone app and connect to this watch",
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * Content shown when waiting for phone app to connect.
+ */
+@Composable
+private fun WaitingForPhoneContent() {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier.padding(16.dp)
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(32.dp),
+            strokeWidth = 3.dp
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Waiting for Phone",
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Open AppBooster on your phone",
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

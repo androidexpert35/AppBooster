@@ -2,6 +2,7 @@ package com.tony.appbooster.data.client
 
 import android.content.Context
 import android.util.Log
+import com.tony.appbooster.data.client.pairing.AdbPairingClient
 import com.tony.appbooster.di.IoDispatcher
 import dadb.AdbKeyPair
 import dadb.Dadb
@@ -68,6 +69,78 @@ class RemoteWatchAdbClient @Inject constructor(
         get() = File(context.filesDir, "watch_adb_key.pub")
 
     /**
+     * Checks if ADB keys exist.
+     */
+    fun hasAdbKeys(): Boolean = privateKeyFile.exists() && publicKeyFile.exists()
+
+    /**
+     * Imports ADB keys from external source (e.g., PC's ~/.android/adbkey files).
+     *
+     * This allows reusing a PC's trusted ADB keys so the phone can connect
+     * to devices that already trust the PC.
+     *
+     * @param privateKeyPem The private key in PEM format (content of adbkey file).
+     * @param publicKeyBase64 The public key in base64 format (content of adbkey.pub file).
+     * @return Result indicating success or failure.
+     */
+    suspend fun importAdbKeys(privateKeyPem: String, publicKeyBase64: String): Result<Unit> = withContext(ioDispatcher) {
+        try {
+            Log.d(TAG, "Importing ADB keys...")
+
+            // Validate the keys look reasonable
+            if (!privateKeyPem.contains("PRIVATE KEY")) {
+                return@withContext Result.failure(IllegalArgumentException(
+                    "Invalid private key format. Expected PEM format with 'PRIVATE KEY' header."
+                ))
+            }
+
+            if (publicKeyBase64.isBlank()) {
+                return@withContext Result.failure(IllegalArgumentException(
+                    "Public key cannot be empty."
+                ))
+            }
+
+            // Write the keys to files
+            privateKeyFile.writeText(privateKeyPem.trim())
+            publicKeyFile.writeText(publicKeyBase64.trim())
+
+            Log.d(TAG, "ADB keys imported successfully")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to import ADB keys", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Clears stored ADB keys, forcing regeneration on next use.
+     */
+    suspend fun clearAdbKeys(): Result<Unit> = withContext(ioDispatcher) {
+        try {
+            if (privateKeyFile.exists()) privateKeyFile.delete()
+            if (publicKeyFile.exists()) publicKeyFile.delete()
+            Log.d(TAG, "ADB keys cleared")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear ADB keys", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Gets the current public key for display/sharing.
+     *
+     * @return The public key content or null if not generated yet.
+     */
+    fun getPublicKey(): String? {
+        return if (publicKeyFile.exists()) {
+            publicKeyFile.readText()
+        } else {
+            null
+        }
+    }
+
+    /**
      * Stores the watch's IP and port for reconnection.
      */
     private var lastWatchIp: String? = null
@@ -76,6 +149,8 @@ class RemoteWatchAdbClient @Inject constructor(
     /**
      * Pairs with the watch using the pairing code.
      *
+     * Uses SPAKE2+ protocol for Android 11+ wireless debugging pairing.
+     *
      * @param watchIp The watch's IP address.
      * @param port The pairing port (from Wireless Debugging > Pair with code).
      * @param pairingCode The 6-digit pairing code.
@@ -83,19 +158,32 @@ class RemoteWatchAdbClient @Inject constructor(
      */
     suspend fun pair(watchIp: String, port: Int, pairingCode: String): Result<Unit> = withContext(ioDispatcher) {
         try {
-            Log.d(TAG, "Pairing with watch at $watchIp:$port")
+            Log.d(TAG, "Starting SPAKE2+ pairing with watch at $watchIp:$port")
 
             // Get or create the key pair
             val keyPair = getOrCreateKeyPair()
 
-            // Attempt pairing
-            // Note: dadb library pairing API seems to be unresolved in this context.
-            // Temporarily disabling automatic pairing.
-            // Dadb.pair(watchIp, port, pairingCode, keyPair)
-            throw UnsupportedOperationException("Automatic pairing not supported yet. Please pair via PC.")
+            // Perform real SPAKE2+ pairing
+            val pairingClient = AdbPairingClient(ioDispatcher)
+            val result = pairingClient.pair(
+                host = watchIp,
+                port = port,
+                pairingCode = pairingCode,
+                keyPair = keyPair
+            )
 
-            Log.d(TAG, "Pairing successful")
-            Result.success(Unit)
+            when (result) {
+                is AdbPairingClient.PairingResult.Success -> {
+                    Log.d(TAG, "Pairing successful with device: ${result.deviceName}")
+                    Result.success(Unit)
+                }
+                is AdbPairingClient.PairingResult.Failure -> {
+                    Log.e(TAG, "Pairing failed: ${result.error}", result.exception)
+                    Result.failure(
+                        result.exception ?: Exception(result.error)
+                    )
+                }
+            }
         } catch (e: Exception) {
             val msg = "Pairing failed: ${e.message}"
             Log.e(TAG, msg, e)
@@ -147,9 +235,37 @@ class RemoteWatchAdbClient @Inject constructor(
                     Result.failure(IllegalStateException(errorMsg))
                 }
             } catch (e: Exception) {
-                _connectionState.value = ConnectionState.Error(e.message ?: "Connection failed")
+                val errorMsg = e.message ?: "Connection failed"
                 Log.e(TAG, "Failed to connect to watch ADB", e)
-                Result.failure(e)
+
+                // Check for authorization/key rejection errors
+                val userMessage = when {
+                    errorMsg.contains("AUTH", ignoreCase = true) ||
+                    errorMsg.contains("unauthorized", ignoreCase = true) ||
+                    errorMsg.contains("key", ignoreCase = true) ||
+                    errorMsg.contains("[10000000", ignoreCase = true) ->
+                        "Connection rejected: Watch doesn't trust this phone.\n\n" +
+                        "You need to pair THIS PHONE with the watch:\n" +
+                        "1. On watch: Wireless Debugging → Pair new device\n" +
+                        "2. Enter the pairing info above and tap 'Pair Device'\n\n" +
+                        "(Pairing from a PC only authorizes that PC, not this phone)"
+
+                    errorMsg.contains("refused", ignoreCase = true) ->
+                        "Connection refused.\n\n" +
+                        "Make sure:\n" +
+                        "• Wireless Debugging is ON on the watch\n" +
+                        "• You're using the CONNECTION port (not pairing port)\n" +
+                        "• Both devices are on the same network"
+
+                    errorMsg.contains("timeout", ignoreCase = true) ->
+                        "Connection timed out.\n\n" +
+                        "Check the IP address and port, and ensure the watch is reachable."
+
+                    else -> "Connection failed: $errorMsg"
+                }
+
+                _connectionState.value = ConnectionState.Error(userMessage)
+                Result.failure(Exception(userMessage))
             }
         }
     }
