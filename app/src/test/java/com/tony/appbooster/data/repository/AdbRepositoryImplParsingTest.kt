@@ -1,6 +1,7 @@
 package com.tony.appbooster.data.repository
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -91,5 +92,30 @@ class AdbRepositoryImplParsingTest {
                 dump = dump
             )
         )
+    }
+
+    @Test
+    fun `given dumpsys package overlayTarget when PackageClassifier then returns true`() {
+        val pkg = "com.android.systemui.auto_generated_rro_product__"
+        val dump = """
+            Package [$pkg] (23e1d84):
+                codePath=/product/overlay/SystemUIGoogle__sdk_gphone64_x86_64__auto_generated_rro_product.apk
+                resourcePath=/product/overlay/SystemUIGoogle__sdk_gphone64_x86_64__auto_generated_rro_product.apk
+                overlayTarget=com.android.systemui
+        """.trimIndent()
+
+        assertTrue(PackageClassifier.isOverlayLike(packageName = pkg, dumpsysPackageOutput = dump))
+    }
+
+    @Test
+    fun `given normal codePath without overlay markers when PackageClassifier then returns false`() {
+        val pkg = "com.example.normal"
+        val dump = """
+            Package [$pkg] (aaaa):
+                codePath=/data/app/~~hash==/com.example.normal-abc/base.apk
+                resourcePath=/data/app/~~hash==/com.example.normal-abc/base.apk
+        """.trimIndent()
+
+        assertFalse(PackageClassifier.isOverlayLike(packageName = pkg, dumpsysPackageOutput = dump))
     }
 }

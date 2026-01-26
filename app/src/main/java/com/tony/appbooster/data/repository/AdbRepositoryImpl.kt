@@ -77,6 +77,14 @@ class AdbRepositoryImpl @Inject constructor(
     private var cachedDexoptDump: String? = null
 
     /**
+     * Cached `dumpsys package <pkg>` outputs for the current run.
+     *
+     * Business purpose:
+     * - Enables strong overlay detection without re-running dumpsys multiple times.
+     */
+    private val cachedPackageDumps = mutableMapOf<String, String>()
+
+    /**
      * Ensures Shizuku is ready and validates shell access with a health check.
      *
      * @return [Resource.Success] when ready, or [Resource.Error] with details.
@@ -204,6 +212,7 @@ class AdbRepositoryImpl @Inject constructor(
 
             // Reset per-run caches
             cachedDexoptDump = null
+            cachedPackageDumps.clear()
 
             addLogEntry(LogEntryType.START, "Starting optimization", detail = "Mode: $compileMode")
 
@@ -433,6 +442,7 @@ class AdbRepositoryImpl @Inject constructor(
 
             // Reset per-run caches
             cachedDexoptDump = null
+            cachedPackageDumps.clear()
 
             _optimizationAnalysis.value = _optimizationAnalysis.value.copy(isScanning = true)
 
@@ -801,11 +811,27 @@ class AdbRepositoryImpl @Inject constructor(
                 skipReason = null
             }
 
-            // Some Android builds only tell us that a package is present in the Dexopt state section
-            // (common for overlays / system resource packages). Treat these as not optimizable.
+            // Some Android builds only list certain packages (often overlays/RRO) in the Dexopt state section
+            // without providing any compiler filter details. These are typically resource-only packages with
+            // no meaningful dex compilation target.
+            //
+            // IMPORTANT: we only skip when we have strong signals this is an overlay/RRO. Otherwise we keep
+            // treating it as needing optimization so we don't hide real system apps.
             filter == "unknown-present" -> {
-                needsOptimization = false
-                skipReason = AppCompilationInfo.SkipReason.AlreadyOptimal("system-package")
+                val dump = cachedPackageDumps[packageName] ?: run {
+                    val dumpResult = shellDataSource.executeCommand("dumpsys package $packageName")
+                    dumpResult.getOrNull()?.also { cachedPackageDumps[packageName] = it }
+                }
+                val isOverlayLike = PackageClassifier.isOverlayLike(packageName = packageName, dumpsysPackageOutput = dump)
+
+                if (isOverlayLike) {
+                    needsOptimization = false
+                    skipReason = AppCompilationInfo.SkipReason.AlreadyOptimal("overlay/rro")
+                } else {
+                    // We cannot prove it's an overlay, so keep it eligible.
+                    needsOptimization = true
+                    skipReason = null
+                }
             }
 
             filter == "unknown-optimized" -> {
@@ -880,6 +906,30 @@ class AdbRepositoryImpl @Inject constructor(
             null
         }
     }
+
+    /**
+     * Heuristic to identify packages that are very likely overlay / RRO style artifacts.
+     *
+     * Business purpose:
+     * - Prevents analysis from reporting hundreds of false positives coming from overlay packages.
+     * - Keeps real system apps (SystemUI, Settings, etc.) eligible for optimization.
+     *
+     * @param packageName Candidate package.
+     * @return True if the package name strongly suggests an overlay/RRO artifact.
+     */
+    // Remove outdated name-only heuristic (superseded by PackageClassifier + dumpsys parsing).
+    // private fun isLikelyOverlayPackage(packageName: String): Boolean {
+    //     val lower = packageName.lowercase()
+
+    //     // Strong signals found on AOSP/GMS images:
+    //     // - `*.overlay*`
+    //     // - `*.rro*`
+    //     // - `*auto_generated_rro*`
+    //     if ("overlay" in lower) return true
+    //     if ("rro" in lower) return true
+
+    //     return false
+    // }
 
     /**
      * Appends a new log entry to the internal command output history so
