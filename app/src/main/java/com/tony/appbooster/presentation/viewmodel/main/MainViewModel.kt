@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.alkemy.boxapp.presentation.navigation.interfaces.NavigationManager
 import com.tony.appbooster.R
 import com.tony.appbooster.domain.model.common.Resource
+import com.tony.appbooster.domain.model.common.ResourceError
 import com.tony.appbooster.domain.usecase.ConnectAdbUseCase
 import com.tony.appbooster.domain.usecase.ObserveAdbConnectionStateUseCase
 import com.tony.appbooster.domain.usecase.ObserveAppOptimizationTypeUseCase
@@ -160,15 +161,13 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch(exceptionHandler) {
             when (val result = startAnalysisUseCase(mode)) {
                 is Resource.Success -> Unit
-                is Resource.Error -> {
-                    emitEffect(
-                        MainUiEffect.ShowSnackbar(
-                            ResourceErrorUiMapper.toUserMessage(appContext, result.data)
-                        )
-                    )
-                }
+                is Resource.Error -> showErrorSnackbar(result.data)
             }
         }
+    }
+
+    private fun showErrorSnackbar(error: ResourceError) {
+        emitEffect(MainUiEffect.ShowSnackbar(ResourceErrorUiMapper.toUserMessage(appContext, error)))
     }
 
     override fun handleEvent(event: MainUiEvent) {
@@ -219,13 +218,14 @@ class MainViewModel @Inject constructor(
             },
             updateUiAfterError = { uiError ->
                 val type = uiError.type
-                val message = if (type is com.tony.appbooster.domain.model.common.ResourceError) {
-                    ResourceErrorUiMapper.toUserMessage(appContext, type)
+                val domainError = type as? ResourceError
+                if (domainError != null) {
+                    showErrorSnackbar(domainError)
                 } else {
-                    uiError.message
+                    // Fallback to BaseViewModel-generated message when we don't have domain error.
+                    emitEffect(MainUiEffect.ShowSnackbar(uiError.message))
                 }
 
-                emitEffect(MainUiEffect.ShowSnackbar(message))
                 uiState.value.data
             },
             invokeOnCompletion = {
