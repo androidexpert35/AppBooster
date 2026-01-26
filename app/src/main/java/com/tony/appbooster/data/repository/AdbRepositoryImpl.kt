@@ -58,6 +58,7 @@ class AdbRepositoryImpl @Inject constructor(
     override val optimizationAnalysis = _optimizationAnalysis.asStateFlow()
 
     private val optimizationCancelRequested = AtomicBoolean(false)
+    private val analysisCancelRequested = AtomicBoolean(false)
 
     /**
      * In-memory cache of packages we've successfully optimized in this session.
@@ -126,25 +127,28 @@ class AdbRepositoryImpl @Inject constructor(
                 return@runCatching
             }
 
-            // Flag is checked between package commands so we can stop quickly and safely.
             optimizationCancelRequested.set(true)
-            addLog("Cancellation requested. Finishing current step...")
-
-            _optimizationProgress.value = _optimizationProgress.value.copy(
-                isRunning = false,
-                result = OptimizationResult.Canceled,
-                currentAppPackage = ""
-            )
+            addLog("⏹ Cancelling optimization...")
+            addLogEntry(LogEntryType.CANCELLED, "Requesting cancellation...")
         }.fold(
             onSuccess = { Resource.Success(Unit) },
-            onFailure = { throwable ->
-                addLog("Failed to cancel optimization: ${throwable.message}")
-                Resource.Error(
-                    ResourceError.LogicError(
-                        errorMessage = throwable.message ?: "Failed to cancel optimization."
-                    )
-                )
+            onFailure = { Resource.Error(ResourceError.LogicError(it.message)) }
+        )
+    }
+
+    override suspend fun cancelAnalysis(): Resource<Unit> {
+        return runCatching {
+            if (!_optimizationAnalysis.value.isScanning) {
+                addLog("No analysis is currently running.")
+                return@runCatching
             }
+
+            analysisCancelRequested.set(true)
+            addLog("⏹ Cancelling analysis...")
+            addLogEntry(LogEntryType.CANCELLED, "Requesting analysis cancellation...")
+        }.fold(
+            onSuccess = { Resource.Success(Unit) },
+            onFailure = { Resource.Error(ResourceError.LogicError(it.message)) }
         )
     }
 
@@ -188,35 +192,91 @@ class AdbRepositoryImpl @Inject constructor(
             // Check if we have a valid analysis we can reuse (persists for app lifecycle)
             val existingAnalysis = _optimizationAnalysis.value
             val analysisIsValid = existingAnalysis.lastScanTimeMs != null &&
-                existingAnalysis.totalAppsScanned > 0
+                existingAnalysis.totalAppsScanned > 0 &&
+                existingAnalysis.packagesNeedingOptimization.isNotEmpty() ||
+                (existingAnalysis.lastScanTimeMs != null && existingAnalysis.appsNeedingOptimization == 0)
 
             val packagesToOptimize: List<String>
             val skippedCount: Int
 
             if (analysisIsValid) {
-                // Reuse existing analysis - no need to re-scan
+                // Reuse existing analysis - use cached package list directly (no re-query!)
                 addLog("Using existing analysis from this session")
                 addLogEntry(LogEntryType.INFO, "Using cached analysis", detail = "${existingAnalysis.appsNeedingOptimization} apps need optimization")
 
-                // We still need to get the actual package list to optimize
-                // Filter based on cached optimization info (uses in-memory cache)
-                packagesToOptimize = filterPackagesForOptimization(allPackages, compileMode)
-                skippedCount = allPackages.size - packagesToOptimize.size
+                // Use the cached list directly - no need to re-query packages
+                packagesToOptimize = existingAnalysis.packagesNeedingOptimization
+                skippedCount = existingAnalysis.appsAlreadyOptimized
             } else {
-                // Need to perform fresh analysis
+                // Need to perform fresh analysis - show the same UI as analyze button
                 addLog("Analyzing optimization status...")
                 addLogEntry(LogEntryType.ANALYZING, "Analyzing apps...", detail = "Checking ${allPackages.size} apps")
 
-                // Query compilation status and filter apps that need optimization
-                packagesToOptimize = filterPackagesForOptimization(allPackages, compileMode)
-                skippedCount = allPackages.size - packagesToOptimize.size
+                // Set scanning state to show analysis UI in hero card
+                _optimizationAnalysis.value = _optimizationAnalysis.value.copy(
+                    isScanning = true,
+                    totalAppsToScan = allPackages.size,
+                    totalAppsScanned = 0,
+                    currentPackage = ""
+                )
 
-                // Update the analysis state for future use
+                // Perform analysis with progress updates (same as analyzeOptimizationStatus)
+                var needsOptimization = 0
+                var alreadyOptimized = 0
+                val packagesToOptimizeList = mutableListOf<String>()
+
+                for ((index, packageName) in allPackages.withIndex()) {
+                    // Update current package being analyzed
+                    _optimizationAnalysis.value = _optimizationAnalysis.value.copy(
+                        currentPackage = packageName,
+                        totalAppsScanned = index
+                    )
+
+                    val compilationInfo = queryPackageCompilationInfo(packageName, compileMode)
+
+                    if (compilationInfo.needsOptimization) {
+                        needsOptimization++
+                        packagesToOptimizeList.add(packageName)
+                        addLogEntry(
+                            LogEntryType.INFO,
+                            "Needs optimization",
+                            packageName = packageName,
+                            detail = compilationInfo.compilerFilter?.let { "Current: $it" } ?: "Not compiled"
+                        )
+                    } else {
+                        alreadyOptimized++
+                        val reason = when (val skip = compilationInfo.skipReason) {
+                            is AppCompilationInfo.SkipReason.RecentlyOptimized -> "Optimized (${skip.filter})"
+                            is AppCompilationInfo.SkipReason.AlreadyOptimal -> "Optimal (${skip.filter})"
+                            else -> "Already optimized"
+                        }
+                        addLogEntry(
+                            LogEntryType.SUCCESS,
+                            reason,
+                            packageName = packageName
+                        )
+                    }
+
+                    // Update progress state
+                    _optimizationAnalysis.value = _optimizationAnalysis.value.copy(
+                        totalAppsScanned = index + 1,
+                        appsNeedingOptimization = needsOptimization,
+                        appsAlreadyOptimized = alreadyOptimized
+                    )
+                }
+
+                packagesToOptimize = packagesToOptimizeList
+                skippedCount = alreadyOptimized
+
+                // Update the analysis state - scanning complete, with cached package list
                 _optimizationAnalysis.value = OptimizationAnalysis(
                     totalAppsScanned = allPackages.size,
-                    appsNeedingOptimization = packagesToOptimize.size,
-                    appsAlreadyOptimized = skippedCount,
+                    totalAppsToScan = allPackages.size,
+                    appsNeedingOptimization = needsOptimization,
+                    appsAlreadyOptimized = alreadyOptimized,
+                    packagesNeedingOptimization = packagesToOptimizeList,
                     isScanning = false,
+                    currentPackage = "",
                     lastScanTimeMs = System.currentTimeMillis()
                 )
 
@@ -359,6 +419,9 @@ class AdbRepositoryImpl @Inject constructor(
         mode: AppOptimizationType
     ): Resource<OptimizationAnalysis> {
         return runCatching {
+            // Reset cancellation
+            analysisCancelRequested.set(false)
+
             // Clear previous log entries for a fresh analysis view
             clearLogEntries()
 
@@ -388,6 +451,7 @@ class AdbRepositoryImpl @Inject constructor(
             var needsOptimization = 0
             var alreadyOptimized = 0
             val totalApps = allPackages.size
+            val packagesNeedingOptimizationList = mutableListOf<String>()
 
             // Initialize progress tracking
             _optimizationAnalysis.value = _optimizationAnalysis.value.copy(
@@ -397,6 +461,14 @@ class AdbRepositoryImpl @Inject constructor(
             )
 
             for ((index, packageName) in allPackages.withIndex()) {
+                // Check for cancellation
+                if (analysisCancelRequested.get()) {
+                    addLog("Analysis cancelled.")
+                    _optimizationAnalysis.value = _optimizationAnalysis.value.copy(isScanning = false)
+                    // Return partial result or throw? Throwing to be caught by runCatching
+                    throw java.util.concurrent.CancellationException("Analysis cancelled by user")
+                }
+
                 // Update current package being analyzed
                 _optimizationAnalysis.value = _optimizationAnalysis.value.copy(
                     currentPackage = packageName,
@@ -407,6 +479,7 @@ class AdbRepositoryImpl @Inject constructor(
 
                 if (compilationInfo.needsOptimization) {
                     needsOptimization++
+                    packagesNeedingOptimizationList.add(packageName)
                     // Show apps that need optimization
                     addLogEntry(
                         LogEntryType.INFO,
@@ -442,6 +515,7 @@ class AdbRepositoryImpl @Inject constructor(
                 totalAppsToScan = allPackages.size,
                 appsNeedingOptimization = needsOptimization,
                 appsAlreadyOptimized = alreadyOptimized,
+                packagesNeedingOptimization = packagesNeedingOptimizationList,
                 isScanning = false,
                 currentPackage = "",
                 lastScanTimeMs = System.currentTimeMillis()
@@ -602,49 +676,6 @@ class AdbRepositoryImpl @Inject constructor(
         )
     }
 
-    /**
-     * Filters packages that actually need optimization based on their current
-     * compilation status and the time since last optimization.
-     *
-     * This implements smart optimization logic:
-     * - Apps updated after their last compilation are always included
-     * - Apps optimized within the last 7 days are skipped (unless updated)
-     * - Apps with lower-quality compiler filters are included
-     * - Apps with no compilation info are included
-     *
-     * @param packages List of all installed package names to evaluate.
-     * @param targetFilter The target compiler filter (e.g., "speed", "speed-profile").
-     * @return Filtered list of packages that should be optimized.
-     */
-    private suspend fun filterPackagesForOptimization(
-        packages: List<String>,
-        targetFilter: String
-    ): List<String> {
-        val packagesToOptimize = mutableListOf<String>()
-
-        for (packageName in packages) {
-            val compilationInfo = queryPackageCompilationInfo(packageName, targetFilter)
-
-            if (compilationInfo.needsOptimization) {
-                packagesToOptimize.add(packageName)
-            } else {
-                // Generate detailed skip reason for logging
-                val skipMessage = when (val reason = compilationInfo.skipReason) {
-                    is AppCompilationInfo.SkipReason.RecentlyOptimized -> {
-                        "optimized ${reason.daysAgo} days ago with ${reason.filter}"
-                    }
-                    is AppCompilationInfo.SkipReason.AlreadyOptimal -> {
-                        "already optimal (${reason.filter})"
-                    }
-                    AppCompilationInfo.SkipReason.SystemApp -> "system app"
-                    null -> "already optimized"
-                }
-                addLog("⏭ Skip: $packageName ($skipMessage)")
-            }
-        }
-
-        return packagesToOptimize
-    }
 
     /**
      * Queries the compilation status for a single package using multiple approaches:

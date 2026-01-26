@@ -99,6 +99,11 @@ interface AdbRepository {
     val optimizationAnalysis: StateFlow<OptimizationAnalysis>
 
     /**
+     * Attempts to cancel the currently running analysis scan.
+     */
+    suspend fun cancelAnalysis(): Resource<Unit>
+
+    /**
      * Analyzes all installed apps to determine which need optimization.
      *
      * This is a lightweight scan that checks compilation status without

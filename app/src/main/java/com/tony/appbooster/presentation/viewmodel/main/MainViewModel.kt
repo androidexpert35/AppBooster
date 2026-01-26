@@ -10,6 +10,7 @@ import com.tony.appbooster.domain.usecase.ConnectAdbUseCase
 import com.tony.appbooster.domain.usecase.ObserveAppOptimizationTypeUseCase
 import com.tony.appbooster.domain.usecase.OptimizeAppUseCase
 import com.tony.appbooster.presentation.viewmodel.base.BaseViewModel
+import com.tony.appbooster.presentation.worker.AnalysisWorker
 import com.tony.appbooster.presentation.worker.OptimizationWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -159,7 +160,7 @@ class MainViewModel @Inject constructor(
             // First ensure Shizuku is connected
             val connectionResult = connectAdbUseCase()
             if (connectionResult is Resource.Success) {
-                repository.analyzeOptimizationStatus(mode)
+                AnalysisWorker.enqueue(appContext, mode)
             }
         }
     }
@@ -171,7 +172,19 @@ class MainViewModel @Inject constructor(
             MainUiEvent.OnStopOptimizationClicked -> onStopOptimizationRequested()
             MainUiEvent.OnDismissOptimizationResultClicked -> onDismissOptimizationResultRequested()
             MainUiEvent.OnAnalyzeAppsClicked -> triggerAnalysis()
+            MainUiEvent.OnStopAnalysisClicked -> onStopAnalysisRequested()
         }
+    }
+
+    private fun onStopAnalysisRequested() {
+        AnalysisWorker.cancel(appContext)
+        launchUiStateUpdate(
+            dataFetchBlock = { repository.cancelAnalysis() },
+            skipLoading = true,
+            processSuccess = {
+                uiState.value.data ?: MainUiModel()
+            }
+        )
     }
 
     private fun onDismissOptimizationResultRequested() {

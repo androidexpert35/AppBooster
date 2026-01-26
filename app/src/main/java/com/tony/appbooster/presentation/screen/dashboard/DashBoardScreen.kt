@@ -159,6 +159,7 @@ fun DashboardScreen(viewModel: MainViewModel) {
             onStopOptimization = { viewModel.onEvent(MainUiEvent.OnStopOptimizationClicked) },
             onDismissResult = { viewModel.onEvent(MainUiEvent.OnDismissOptimizationResultClicked) },
             onAnalyze = { viewModel.onEvent(MainUiEvent.OnAnalyzeAppsClicked) },
+            onStopAnalysis = { viewModel.onEvent(MainUiEvent.OnStopAnalysisClicked) },
             snackbarHostState = snackbarHostState
         )
     }
@@ -172,6 +173,7 @@ private fun DashboardContent(
     onStopOptimization: () -> Unit,
     onDismissResult: () -> Unit,
     onAnalyze: () -> Unit,
+    onStopAnalysis: () -> Unit,
     snackbarHostState: SnackbarHostState
 ) {
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
@@ -209,7 +211,7 @@ private fun DashboardContent(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Hero card - always visible, changes content based on state
-            HeroControlPanel(model, onStartOptimization, onStopOptimization, onDismissResult, onAnalyze)
+            HeroControlPanel(model, onStartOptimization, onStopOptimization, onDismissResult, onAnalyze, onStopAnalysis)
 
             // Activity feed - always visible
             OptimizationActivityFeed(
@@ -234,7 +236,8 @@ private fun HeroControlPanel(
     onStartOptimization: () -> Unit,
     onStopOptimization: () -> Unit,
     onDismissResult: () -> Unit,
-    onAnalyze: () -> Unit
+    onAnalyze: () -> Unit,
+    onStopAnalysis: () -> Unit
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val tertiaryColor = MaterialTheme.colorScheme.tertiary
@@ -359,7 +362,8 @@ private fun HeroControlPanel(
                                 analysis = model.optimizationAnalysis,
                                 isStarting = model.isStartingOptimization,
                                 onStartOptimization = onStartOptimization,
-                                onAnalyze = onAnalyze
+                                onAnalyze = onAnalyze,
+                                onStopAnalysis = onStopAnalysis
                             )
                         }
                     }
@@ -371,6 +375,7 @@ private fun HeroControlPanel(
 
 /**
  * Content displayed while optimization is running with horizontal progress bar.
+ * Uses the unified ProcessProgressContent for consistent UI.
  */
 @Composable
 private fun OptimizationRunningContent(
@@ -380,105 +385,15 @@ private fun OptimizationRunningContent(
     currentAppPackage: String,
     onStop: () -> Unit
 ) {
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(400, easing = EaseOutCubic),
-        label = "progressAnimation"
+    ProcessProgressContent(
+        title = stringResource(R.string.dashboard_optimizing_title),
+        subtitle = "$processedCount / $totalCount apps",
+        progress = progress,
+        currentPackage = currentAppPackage,
+        statsLeft = null, // Optimization doesn't show stats during progress
+        statsRight = null,
+        onStop = onStop
     )
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Progress info row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = stringResource(R.string.dashboard_optimizing_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "$processedCount / $totalCount apps",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Percentage badge
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Text(
-                    text = "${(animatedProgress * 100).toInt()}%",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                )
-            }
-        }
-
-        // Horizontal progress bar
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(animatedProgress)
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.tertiary
-                            )
-                        )
-                    )
-            )
-        }
-
-        // Stop button - full width
-        Surface(
-            onClick = onStop,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.errorContainer,
-            tonalElevation = 2.dp
-        ) {
-            Row(
-                modifier = Modifier.padding(vertical = 14.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.StopCircle,
-                    contentDescription = stringResource(R.string.dashboard_stop_optimization_cd),
-                    modifier = Modifier.size(22.dp),
-                    tint = MaterialTheme.colorScheme.onErrorContainer
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = stringResource(R.string.action_stop),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
-            }
-        }
-    }
 }
 
 
@@ -488,11 +403,12 @@ private fun OptimizationReadyContent(
     analysis: com.tony.appbooster.domain.model.common.OptimizationAnalysis,
     isStarting: Boolean = false,
     onStartOptimization: () -> Unit,
-    onAnalyze: () -> Unit
+    onAnalyze: () -> Unit,
+    onStopAnalysis: () -> Unit
 ) {
     // Show minimal scanning UI when analyzing
     if (analysis.isScanning) {
-        ScanningContent(analysis = analysis)
+        ScanningContent(analysis = analysis, onStop = onStopAnalysis)
         return
     }
 
@@ -658,27 +574,29 @@ private fun OptimizationReadyContent(
 }
 
 /**
- * Beautiful scanning state content with detailed progress.
+ * Unified progress content for both analysis and optimization processes.
+ * Provides a consistent UI with title, progress bar, current app, stats, and stop button.
  *
- * @param analysis Current analysis state with progress info.
+ * @param title The title to display (e.g., "Analyzing Apps" or "Optimizing Apps").
+ * @param subtitle The subtitle showing progress (e.g., "10 / 50 apps").
+ * @param progress Progress value from 0f to 1f.
+ * @param currentPackage Package currently being processed, empty if none.
+ * @param statsLeft Pair of (count, label) for left stat chip (e.g., "need" count).
+ * @param statsRight Pair of (count, label) for right stat chip (e.g., "done" count).
+ * @param onStop Callback when stop button is pressed.
  */
 @Composable
-private fun ScanningContent(
-    analysis: com.tony.appbooster.domain.model.common.OptimizationAnalysis
+private fun ProcessProgressContent(
+    title: String,
+    subtitle: String,
+    progress: Float,
+    currentPackage: String,
+    statsLeft: Pair<Int, String>? = null,
+    statsRight: Pair<Int, String>? = null,
+    onStop: () -> Unit
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "scanning")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = EaseInOutCubic),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseAlpha"
-    )
-
     val animatedProgress by animateFloatAsState(
-        targetValue = analysis.progress,
+        targetValue = progress,
         animationSpec = tween(300, easing = EaseOutCubic),
         label = "progressAnimation"
     )
@@ -687,213 +605,229 @@ private fun ScanningContent(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header row with icon and title
+        // Header row with title and percentage
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Animated search icon
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = pulseAlpha),
-                tonalElevation = 2.dp
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    androidx.compose.material3.CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.5.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
+            Column {
                 Text(
-                    text = stringResource(R.string.analysis_scanning_title),
+                    text = title,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = if (analysis.totalAppsToScan > 0)
-                        "${analysis.totalAppsScanned} / ${analysis.totalAppsToScan} apps"
-                    else
-                        stringResource(R.string.analysis_scanning_subtitle),
+                    text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             // Percentage badge
-            if (analysis.totalAppsToScan > 0) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Text(
-                        text = "${(animatedProgress * 100).toInt()}%",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
-                }
-            }
-        }
-
-        // Progress bar
-        if (analysis.totalAppsToScan > 0) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(animatedProgress)
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(
-                            Brush.horizontalGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.colorScheme.tertiary
-                                )
-                            )
-                        )
+                Text(
+                    text = "${(animatedProgress * 100).toInt()}%",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
         }
 
-        // Current app being analyzed
-        if (analysis.currentPackage.isNotEmpty()) {
+        // Progress bar
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(animatedProgress.coerceIn(0f, 1f))
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.tertiary
+                            )
+                        )
+                    )
+            )
+        }
+
+        // Current app being processed
+        if (currentPackage.isNotEmpty()) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                Column(
+                    modifier = Modifier.padding(12.dp)
                 ) {
-                    // App icon placeholder with animated background
-                    Surface(
-                        modifier = Modifier.size(36.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = pulseAlpha)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = analysis.currentPackage
-                                    .substringAfterLast(".")
-                                    .take(1)
-                                    .uppercase(),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = analysis.currentPackage.substringAfterLast(".").replaceFirstChar { it.uppercase() },
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = analysis.currentPackage,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = currentPackage.substringAfterLast(".").replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = currentPackage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
 
-        // Stats row
-        if (analysis.totalAppsScanned > 0) {
+        // Stats row (optional)
+        if (statsLeft != null || statsRight != null) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Needs optimization count
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                // Left stat chip
+                if (statsLeft != null) {
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.RocketLaunch,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "${analysis.appsNeedingOptimization}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = "need",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.RocketLaunch,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "${statsLeft.first}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = statsLeft.second,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
                     }
                 }
 
-                // Already optimized count
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                // Right stat chip
+                if (statsRight != null) {
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.CheckCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "${analysis.appsAlreadyOptimized}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = "done",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.CheckCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "${statsRight.first}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = statsRight.second,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
                     }
                 }
             }
         }
+
+        // Stop button - full width
+        Surface(
+            onClick = onStop,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.errorContainer,
+            tonalElevation = 2.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(vertical = 14.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.StopCircle,
+                    contentDescription = stringResource(R.string.dashboard_stop_optimization_cd),
+                    modifier = Modifier.size(22.dp),
+                    tint = MaterialTheme.colorScheme.onErrorContainer
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = stringResource(R.string.action_stop),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+        }
     }
+}
+
+/**
+ * Analysis scanning content that uses the unified ProcessProgressContent.
+ *
+ * @param analysis Current analysis state with progress info.
+ * @param onStop Callback when stop button is pressed.
+ */
+@Composable
+private fun ScanningContent(
+    analysis: com.tony.appbooster.domain.model.common.OptimizationAnalysis,
+    onStop: () -> Unit
+) {
+    ProcessProgressContent(
+        title = stringResource(R.string.analysis_scanning_title),
+        subtitle = if (analysis.totalAppsToScan > 0)
+            "${analysis.totalAppsScanned} / ${analysis.totalAppsToScan} apps"
+        else
+            stringResource(R.string.analysis_scanning_subtitle),
+        progress = analysis.progress,
+        currentPackage = analysis.currentPackage,
+        statsLeft = if (analysis.totalAppsScanned > 0)
+            Pair(analysis.appsNeedingOptimization, "need")
+        else null,
+        statsRight = if (analysis.totalAppsScanned > 0)
+            Pair(analysis.appsAlreadyOptimized, "done")
+        else null,
+        onStop = onStop
+    )
 }
 
 /**

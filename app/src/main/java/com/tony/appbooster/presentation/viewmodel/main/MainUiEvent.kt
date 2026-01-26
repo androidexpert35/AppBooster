@@ -20,9 +20,15 @@ sealed interface MainUiEvent {
     data object OnStartOptimizationClicked : MainUiEvent
 
     /**
-     * Requests stopping an active optimization workflow.
+     * Requests stopping the current optimization workflow.
      */
     data object OnStopOptimizationClicked : MainUiEvent
+
+    /**
+     * Requests stopping the current analysis workflow.
+     */
+    data object OnStopAnalysisClicked : MainUiEvent
+
 
     /**
      * Requests dismissing the optimization result card (completed/canceled) for the latest run.
