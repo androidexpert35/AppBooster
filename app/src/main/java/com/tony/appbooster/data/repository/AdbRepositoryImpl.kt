@@ -205,12 +205,10 @@ class AdbRepositoryImpl @Inject constructor(
 
             addLog("Found ${allPackages.size} installed packages.")
 
-            // Check if we have a valid analysis we can reuse (persists for app lifecycle)
+            // A cached analysis is considered valid if it exists and was computed for at least one package.
+            // Note: if appsNeedingOptimization == 0 we still consider it valid (means “all optimized”).
             val existingAnalysis = _optimizationAnalysis.value
-            val analysisIsValid = existingAnalysis.lastScanTimeMs != null &&
-                existingAnalysis.totalAppsScanned > 0 &&
-                existingAnalysis.packagesNeedingOptimization.isNotEmpty() ||
-                (existingAnalysis.lastScanTimeMs != null && existingAnalysis.appsNeedingOptimization == 0)
+            val analysisIsValid = existingAnalysis.lastScanTimeMs != null && existingAnalysis.totalAppsScanned > 0
 
             val packagesToOptimize: List<String>
             val skippedCount: Int
@@ -218,85 +216,41 @@ class AdbRepositoryImpl @Inject constructor(
             if (analysisIsValid) {
                 // Reuse existing analysis - use cached package list directly (no re-query!)
                 addLog("Using existing analysis from this session")
-                addLogEntry(LogEntryType.INFO, "Using cached analysis", detail = "${existingAnalysis.appsNeedingOptimization} apps need optimization")
+                addLogEntry(
+                    LogEntryType.INFO,
+                    "Using cached analysis",
+                    detail = "${existingAnalysis.appsNeedingOptimization} apps need optimization"
+                )
 
-                // Use the cached list directly - no need to re-query packages
                 packagesToOptimize = existingAnalysis.packagesNeedingOptimization
                 skippedCount = existingAnalysis.appsAlreadyOptimized
             } else {
-                // Need to perform fresh analysis - show the same UI as analyze button
+                // Perform fresh analysis using the single source of truth.
                 addLog("Analyzing optimization status...")
-                addLogEntry(LogEntryType.ANALYZING, "Analyzing apps...", detail = "Checking ${allPackages.size} apps")
-
-                // Set scanning state to show analysis UI in hero card
-                _optimizationAnalysis.value = _optimizationAnalysis.value.copy(
-                    isScanning = true,
-                    totalAppsToScan = allPackages.size,
-                    totalAppsScanned = 0,
-                    currentPackage = ""
+                addLogEntry(
+                    LogEntryType.ANALYZING,
+                    "Analyzing apps...",
+                    detail = "Checking ${allPackages.size} apps"
                 )
 
-                // Perform analysis with progress updates (same as analyzeOptimizationStatus)
-                var needsOptimization = 0
-                var alreadyOptimized = 0
-                val packagesToOptimizeList = mutableListOf<String>()
-
-                for ((index, packageName) in allPackages.withIndex()) {
-                    // Update current package being analyzed
-                    _optimizationAnalysis.value = _optimizationAnalysis.value.copy(
-                        currentPackage = packageName,
-                        totalAppsScanned = index
-                    )
-
-                    val compilationInfo = queryPackageCompilationInfo(packageName, compileMode)
-
-                    if (compilationInfo.needsOptimization) {
-                        needsOptimization++
-                        packagesToOptimizeList.add(packageName)
-                        addLogEntry(
-                            LogEntryType.INFO,
-                            "Needs optimization",
-                            packageName = packageName,
-                            detail = compilationInfo.compilerFilter?.let { "Current: $it" } ?: "Not compiled"
-                        )
-                    } else {
-                        alreadyOptimized++
-                        val reason = when (val skip = compilationInfo.skipReason) {
-                            is AppCompilationInfo.SkipReason.RecentlyOptimized -> "Optimized (${skip.filter})"
-                            is AppCompilationInfo.SkipReason.AlreadyOptimal -> "Optimal (${skip.filter})"
-                            else -> "Already optimized"
-                        }
-                        addLogEntry(
-                            LogEntryType.SUCCESS,
-                            reason,
-                            packageName = packageName
-                        )
+                when (val analysisResource = analyzeOptimizationStatus(mode)) {
+                    is Resource.Success -> {
+                        packagesToOptimize = analysisResource.data.packagesNeedingOptimization
+                        skippedCount = analysisResource.data.appsAlreadyOptimized
                     }
 
-                    // Update progress state
-                    _optimizationAnalysis.value = _optimizationAnalysis.value.copy(
-                        totalAppsScanned = index + 1,
-                        appsNeedingOptimization = needsOptimization,
-                        appsAlreadyOptimized = alreadyOptimized
-                    )
+                    is Resource.Error -> {
+                        val message = when (val err = analysisResource.data) {
+                            is ResourceError.LogicError -> err.errorMessage
+                            is ResourceError.NetworkError -> err.errorMessage
+                            is ResourceError.DatabaseError -> err.message
+                            is ResourceError.SSLError -> "SSL error"
+                            is ResourceError.UnknownError -> null
+                        }
+                        // Surface failure consistently; optimization can't proceed without package list.
+                        throw IllegalStateException(message ?: "Analysis failed")
+                    }
                 }
-
-                packagesToOptimize = packagesToOptimizeList
-                skippedCount = alreadyOptimized
-
-                // Update the analysis state - scanning complete, with cached package list
-                _optimizationAnalysis.value = OptimizationAnalysis(
-                    totalAppsScanned = allPackages.size,
-                    totalAppsToScan = allPackages.size,
-                    appsNeedingOptimization = needsOptimization,
-                    appsAlreadyOptimized = alreadyOptimized,
-                    packagesNeedingOptimization = packagesToOptimizeList,
-                    isScanning = false,
-                    currentPackage = "",
-                    lastScanTimeMs = System.currentTimeMillis()
-                )
-
-                addLogEntry(LogEntryType.COMPLETE, "Analysis complete", detail = "${packagesToOptimize.size} need optimization, $skippedCount already optimized")
             }
 
             val total = packagesToOptimize.size
