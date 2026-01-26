@@ -251,14 +251,25 @@ private fun DashboardContent(
                 }
             }
 
-            // Activity feed - fills remaining space
-            OptimizationActivityFeed(
-                entries = model.logEntries,
-                isExpanded = !model.optimizationProgress.isRunning,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(bottom = 16.dp)
-            )
+            // Activity feed - only visible when NOT running
+            AnimatedVisibility(
+                visible = !model.optimizationProgress.isRunning,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                OptimizationActivityFeed(
+                    entries = model.logEntries,
+                    isExpanded = true,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(bottom = 16.dp)
+                )
+            }
+
+            // Spacer to fill remaining space when optimization is running
+            if (model.optimizationProgress.isRunning) {
+                Spacer(modifier = Modifier.weight(1f))
+            }
         }
     }
 }
@@ -400,7 +411,7 @@ private fun HeroControlPanel(
 }
 
 /**
- * Minimal running state display with just a stop action.
+ * Expressive running state display with animated icon and stop action.
  * Progress details are shown in the beautiful components below the card.
  *
  * @param model Current screen model containing progress information.
@@ -411,46 +422,58 @@ private fun OptimizationRunningContent(
     model: MainUiModel,
     onStopOptimization: () -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    // Pulsing animation for the icon
+    val infiniteTransition = rememberInfiniteTransition(label = "running")
+    val iconScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = EaseInOutCubic),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "iconScale"
+    )
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        // Animated icon
+        // Animated icon container
         Surface(
-            modifier = Modifier.size(56.dp),
+            modifier = Modifier
+                .size(72.dp)
+                .scale(iconScale),
             shape = CircleShape,
             color = MaterialTheme.colorScheme.primaryContainer,
             tonalElevation = 4.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
-                androidx.compose.material3.CircularProgressIndicator(
-                    modifier = Modifier.size(28.dp),
-                    strokeWidth = 3.dp,
-                    color = MaterialTheme.colorScheme.primary
+                Icon(
+                    imageVector = Icons.Rounded.Speed,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }
 
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.dashboard_optimizing_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = stringResource(
-                    R.string.dashboard_progress_fraction,
-                    model.optimizationProgress.processedCount,
-                    model.optimizationProgress.totalCount
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        Spacer(Modifier.height(20.dp))
 
-        // Stop button
+        Text(
+            text = stringResource(R.string.dashboard_optimizing_title),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Text(
+            text = stringResource(R.string.dashboard_optimizing_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
+        )
+
+        // Stop action button
         FilledTonalButton(
             onClick = onStopOptimization,
             shape = RoundedCornerShape(16.dp),
@@ -458,14 +481,14 @@ private fun OptimizationRunningContent(
                 containerColor = MaterialTheme.colorScheme.errorContainer,
                 contentColor = MaterialTheme.colorScheme.onErrorContainer
             ),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
         ) {
             Icon(
                 imageVector = Icons.Rounded.StopCircle,
                 contentDescription = stringResource(R.string.dashboard_stop_optimization_cd),
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(20.dp)
             )
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = stringResource(R.string.action_stop),
                 style = MaterialTheme.typography.labelLarge,
