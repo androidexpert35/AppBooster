@@ -16,6 +16,7 @@ import com.tony.appbooster.domain.usecase.StartAnalysisUseCase
 import com.tony.appbooster.domain.usecase.StartOptimizationUseCase
 import com.tony.appbooster.domain.usecase.StopAnalysisUseCase
 import com.tony.appbooster.domain.usecase.StopOptimizationUseCase
+import com.tony.appbooster.presentation.error.ResourceErrorUiMapper
 import com.tony.appbooster.presentation.viewmodel.base.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -157,12 +158,12 @@ class MainViewModel @Inject constructor(
     fun triggerAnalysis() {
         val mode = uiState.value.data?.optimizationMode ?: return
         viewModelScope.launch(exceptionHandler) {
-            when (startAnalysisUseCase(mode)) {
+            when (val result = startAnalysisUseCase(mode)) {
                 is Resource.Success -> Unit
                 is Resource.Error -> {
                     emitEffect(
                         MainUiEffect.ShowSnackbar(
-                            appContext.getString(R.string.error_generic_fallback_message)
+                            ResourceErrorUiMapper.toUserMessage(appContext, result.data)
                         )
                     )
                 }
@@ -214,11 +215,20 @@ class MainViewModel @Inject constructor(
             dataFetchBlock = { startOptimizationUseCase(optimizationMode) },
             skipLoading = true,
             processSuccess = {
-                // Keep current UI data; repository flows will push updates.
                 uiState.value.data ?: MainUiModel()
             },
+            updateUiAfterError = { uiError ->
+                val type = uiError.type
+                val message = if (type is com.tony.appbooster.domain.model.common.ResourceError) {
+                    ResourceErrorUiMapper.toUserMessage(appContext, type)
+                } else {
+                    uiError.message
+                }
+
+                emitEffect(MainUiEffect.ShowSnackbar(message))
+                uiState.value.data
+            },
             invokeOnCompletion = {
-                // Clear loading state (scheduled regardless of success)
                 uiState.value.data?.let { currentData ->
                     updateUiData(currentData.copy(isStartingOptimization = false))
                 }
