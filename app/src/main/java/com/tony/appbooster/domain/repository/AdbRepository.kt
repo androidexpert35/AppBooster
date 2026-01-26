@@ -1,6 +1,7 @@
 package com.tony.appbooster.domain.repository
 
 import com.tony.appbooster.domain.model.common.OptimizationAnalysis
+import com.tony.appbooster.domain.model.common.OptimizationLogEntry
 import com.tony.appbooster.domain.model.common.OptimizationProgress
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.model.settings.AppOptimizationType
@@ -32,6 +33,13 @@ interface AdbRepository {
      * @return [StateFlow] emitting immutable snapshots of shell output lines.
      */
     val commandOutput: StateFlow<List<String>>
+
+    /**
+     * Exposes structured log entries for beautiful UI rendering.
+     *
+     * @return [StateFlow] emitting list of [OptimizationLogEntry] items.
+     */
+    val logEntries: StateFlow<List<OptimizationLogEntry>>
 
     /**
      * Exposes progress for long-running optimization flows including the

@@ -117,16 +117,27 @@ class MainViewModel @Inject constructor(
      */
     private fun observeRepository() {
         viewModelScope.launch(exceptionHandler) {
+            // Use nested combine since Kotlin's combine only supports up to 5 flows
             combine(
-                repository.connectionState,
-                repository.commandOutput,
-                repository.optimizationProgress,
-                repository.optimizationAnalysis,
-                dismissedResultRunIds
-            ) { connectionState, logs, progress, analysis, dismissedRunIds ->
+                combine(
+                    repository.connectionState,
+                    repository.commandOutput,
+                    repository.logEntries
+                ) { connectionState, logs, logEntries ->
+                    Triple(connectionState, logs, logEntries)
+                },
+                combine(
+                    repository.optimizationProgress,
+                    repository.optimizationAnalysis,
+                    dismissedResultRunIds
+                ) { progress, analysis, dismissedRunIds ->
+                    Triple(progress, analysis, dismissedRunIds)
+                }
+            ) { (connectionState, logs, logEntries), (progress, analysis, dismissedRunIds) ->
                 MainUiModel(
                     connectionState = connectionState,
                     logs = logs,
+                    logEntries = logEntries,
                     optimizationProgress = progress,
                     optimizationAnalysis = analysis,
                     dismissedResultRunIds = dismissedRunIds
@@ -179,6 +190,11 @@ class MainViewModel @Inject constructor(
             return
         }
 
+        // Set loading state for the start button
+        uiState.value.data?.let { currentData ->
+            updateUiData(currentData.copy(isStartingOptimization = true))
+        }
+
         launchUiStateUpdate(
             dataFetchBlock = { connectAdbUseCase() },
             skipLoading = true,
@@ -187,6 +203,11 @@ class MainViewModel @Inject constructor(
                 uiState.value.data ?: MainUiModel()
             },
             invokeOnCompletion = { success ->
+                // Clear loading state
+                uiState.value.data?.let { currentData ->
+                    updateUiData(currentData.copy(isStartingOptimization = false))
+                }
+
                 if (success) {
                     // New run will produce a new progress.runId from the repository; no explicit reset needed.
                     OptimizationWorker.enqueue(appContext, optimizationMode)

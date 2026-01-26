@@ -3,6 +3,7 @@ package com.tony.appbooster.presentation.screen.dashboard
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.EaseOutBack
@@ -17,8 +18,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -37,7 +40,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -55,7 +57,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeTopAppBar
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -80,7 +81,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -98,6 +98,10 @@ import com.tony.appbooster.domain.model.settings.AppOptimizationType
 import com.tony.appbooster.presentation.permission.NotificationPermissionManager
 import com.tony.appbooster.presentation.permission.NotificationPermissionRationaleDialog
 import com.tony.appbooster.presentation.screen.common.basescreen.AppBaseScreen
+import com.tony.appbooster.presentation.screen.dashboard.components.CircularOptimizationProgress
+import com.tony.appbooster.presentation.screen.dashboard.components.CurrentAppCard
+import com.tony.appbooster.presentation.screen.dashboard.components.OptimizationActivityFeed
+import com.tony.appbooster.presentation.screen.dashboard.components.OptimizationStatsBar
 import com.tony.appbooster.presentation.viewmodel.main.MainUiEffect
 import com.tony.appbooster.presentation.viewmodel.main.MainUiEvent
 import com.tony.appbooster.presentation.viewmodel.main.MainUiModel
@@ -180,14 +184,8 @@ private fun DashboardContent(
     onAnalyze: () -> Unit,
     snackbarHostState: SnackbarHostState
 ) {
-    val listState = rememberLazyListState()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
 
-    LaunchedEffect(model.logs.size) {
-        if (model.logs.isNotEmpty()) {
-            listState.animateScrollToItem(model.logs.size - 1)
-        }
-    }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -217,10 +215,50 @@ private fun DashboardContent(
         Column(
             modifier = Modifier
                 .padding(padding)
-                .fillMaxSize()
+                .fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             HeroControlPanel(model, onStartOptimization, onStopOptimization, onDismissResult, onAnalyze)
-            TerminalSection(model.logs, listState)
+
+            // Show beautiful progress when running
+            AnimatedVisibility(
+                visible = model.optimizationProgress.isRunning,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Circular progress indicator
+                    CircularOptimizationProgress(
+                        progress = model.optimizationProgress.progress,
+                        processedCount = model.optimizationProgress.processedCount,
+                        totalCount = model.optimizationProgress.totalCount,
+                        currentApp = model.optimizationProgress.currentAppPackage
+                    )
+
+                    // Current app card
+                    CurrentAppCard(packageName = model.optimizationProgress.currentAppPackage)
+
+                    // Stats bar
+                    OptimizationStatsBar(
+                        optimizedCount = model.optimizationProgress.processedCount,
+                        skippedCount = model.optimizationProgress.skippedCount,
+                        failedCount = 0 // TODO: Track failures
+                    )
+                }
+            }
+
+            // Activity feed - fills remaining space
+            OptimizationActivityFeed(
+                entries = model.logEntries,
+                isExpanded = !model.optimizationProgress.isRunning,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(bottom = 16.dp)
+            )
         }
     }
 }
@@ -349,6 +387,7 @@ private fun HeroControlPanel(
                             OptimizationReadyContent(
                                 optimizationMode = model.optimizationMode,
                                 analysis = model.optimizationAnalysis,
+                                isStarting = model.isStartingOptimization,
                                 onStartOptimization = onStartOptimization,
                                 onAnalyze = onAnalyze
                             )
@@ -361,8 +400,8 @@ private fun HeroControlPanel(
 }
 
 /**
- * Expressive progress display during active optimization.
- * Features animated progress bar, pulsing icon, and a prominent stop action.
+ * Minimal running state display with just a stop action.
+ * Progress details are shown in the beautiful components below the card.
  *
  * @param model Current screen model containing progress information.
  * @param onStopOptimization Callback when the user requests cancellation.
@@ -372,167 +411,66 @@ private fun OptimizationRunningContent(
     model: MainUiModel,
     onStopOptimization: () -> Unit
 ) {
-    val progress = model.optimizationProgress
-
-    // Pulsing animation for the icon
-    val infiniteTransition = rememberInfiniteTransition(label = "running")
-    val iconScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = EaseInOutCubic),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "iconScale"
-    )
-
-    val progressAnimated by animateFloatAsState(
-        targetValue = progress.progress,
-        animationSpec = tween(400, easing = EaseOutCubic),
-        label = "progressAnim"
-    )
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Animated icon container
+        // Animated icon
         Surface(
-            modifier = Modifier
-                .size(72.dp)
-                .scale(iconScale),
+            modifier = Modifier.size(56.dp),
             shape = CircleShape,
             color = MaterialTheme.colorScheme.primaryContainer,
             tonalElevation = 4.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Rounded.Speed,
-                    contentDescription = null,
-                    modifier = Modifier.size(36.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        Text(
-            text = stringResource(R.string.dashboard_optimizing_title),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        Text(
-            text = stringResource(R.string.dashboard_optimizing_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 24.dp)
-        )
-
-        // Progress indicator with rounded design
-        LinearProgressIndicator(
-            progress = { progressAnimated },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(12.dp)
-                .clip(RoundedCornerShape(6.dp)),
-            strokeCap = StrokeCap.Round,
-            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        // Current app info
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh
-        ) {
-            Row(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.dashboard_current_app_label),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = progress.currentAppPackage.ifEmpty { stringResource(R.string.dashboard_preparing) },
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 3.dp,
                     color = MaterialTheme.colorScheme.primary
-                ) {
-                    Text(
-                        text = stringResource(
-                            R.string.dashboard_progress_fraction,
-                            progress.processedCount,
-                            progress.totalCount
-                        ),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
+                )
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.dashboard_optimizing_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = stringResource(
+                    R.string.dashboard_progress_fraction,
+                    model.optimizationProgress.processedCount,
+                    model.optimizationProgress.totalCount
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
-        // Stop action (modern, discoverable, but not overly destructive-looking)
-        val containerElevation by animateDpAsState(
-            targetValue = 2.dp,
-            animationSpec = spring(stiffness = Spring.StiffnessMedium),
-            label = "stopElevation"
-        )
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .clickable(onClick = onStopOptimization),
-            color = MaterialTheme.colorScheme.errorContainer,
-            tonalElevation = containerElevation
+        // Stop button
+        FilledTonalButton(
+            onClick = onStopOptimization,
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.filledTonalButtonColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer
+            ),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.StopCircle,
-                    contentDescription = stringResource(R.string.dashboard_stop_optimization_cd),
-                    tint = MaterialTheme.colorScheme.onErrorContainer
-                )
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.action_stop),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                    Text(
-                        text = stringResource(R.string.dashboard_stop_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
-                    )
-                }
-            }
+            Icon(
+                imageVector = Icons.Rounded.StopCircle,
+                contentDescription = stringResource(R.string.dashboard_stop_optimization_cd),
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = stringResource(R.string.action_stop),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }
@@ -541,6 +479,7 @@ private fun OptimizationRunningContent(
 private fun OptimizationReadyContent(
     optimizationMode: AppOptimizationType,
     analysis: com.tony.appbooster.domain.model.common.OptimizationAnalysis,
+    isStarting: Boolean = false,
     onStartOptimization: () -> Unit,
     onAnalyze: () -> Unit
 ) {
@@ -626,24 +565,41 @@ private fun OptimizationReadyContent(
             Column(horizontalAlignment = Alignment.End) {
                 FilledTonalButton(
                     onClick = onStartOptimization,
+                    enabled = !isStarting,
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                        disabledContentColor = MaterialTheme.colorScheme.onPrimary
                     ),
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = stringResource(R.string.action_start),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    if (isStarting) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Starting...",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.action_start),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }

@@ -3,7 +3,9 @@ package com.tony.appbooster.data.repository
 import android.content.Context
 import com.tony.appbooster.domain.client.AdbShellDataSource
 import com.tony.appbooster.domain.model.common.AppCompilationInfo
+import com.tony.appbooster.domain.model.common.LogEntryType
 import com.tony.appbooster.domain.model.common.OptimizationAnalysis
+import com.tony.appbooster.domain.model.common.OptimizationLogEntry
 import com.tony.appbooster.domain.model.common.OptimizationProgress
 import com.tony.appbooster.domain.model.common.OptimizationResult
 import com.tony.appbooster.domain.model.common.Resource
@@ -45,6 +47,9 @@ class AdbRepositoryImpl @Inject constructor(
 
     private val _commandOutput = MutableStateFlow<List<String>>(emptyList())
     override val commandOutput = _commandOutput.asStateFlow()
+
+    private val _logEntries = MutableStateFlow<List<OptimizationLogEntry>>(emptyList())
+    override val logEntries = _logEntries.asStateFlow()
 
     private val _optimizationProgress = MutableStateFlow(OptimizationProgress())
     override val optimizationProgress = _optimizationProgress.asStateFlow()
@@ -157,18 +162,21 @@ class AdbRepositoryImpl @Inject constructor(
     ): Resource<Unit> {
         val compileMode = mode.value
         return runCatching {
-            // Reset cancellation for a new run
+            // Reset cancellation for a new run and clear previous logs
             optimizationCancelRequested.set(false)
+            clearLogEntries()
 
             val allPackages = queryInstalledPackages()
 
             if (allPackages.isEmpty()) {
                 addLog("No packages found for optimization.")
+                addLogEntry(LogEntryType.INFO, "No packages found")
                 return@runCatching
             }
 
             addLog("Found ${allPackages.size} installed packages.")
             addLog("Analyzing optimization status...")
+            addLogEntry(LogEntryType.START, "Starting optimization", detail = "${allPackages.size} apps found")
 
             // Query compilation status and filter apps that need optimization
             val packagesToOptimize = filterPackagesForOptimization(allPackages, compileMode)
@@ -178,6 +186,7 @@ class AdbRepositoryImpl @Inject constructor(
             if (total == 0) {
                 addLog("✓ All apps are already optimized (${skippedCount} apps skipped).")
                 addLog("No optimization needed at this time.")
+                addLogEntry(LogEntryType.COMPLETE, "All apps optimized!", detail = "$skippedCount apps already optimal")
 
                 val runId = System.currentTimeMillis()
                 _optimizationProgress.value = OptimizationProgress(
@@ -208,10 +217,12 @@ class AdbRepositoryImpl @Inject constructor(
             addLog("Optimizing $total apps ($skippedCount already optimized, skipped).")
             addLog("(Excluding ${SELF_PACKAGE_NAME} to prevent self-crash)")
             addLog("Starting compilation (Mode: $compileMode)...")
+            addLogEntry(LogEntryType.INFO, "Mode: $compileMode", detail = "$total to optimize, $skippedCount skipped")
 
             packagesToOptimize.forEachIndexed { index, packageName ->
                 if (optimizationCancelRequested.get()) {
                     addLog("⏹ Optimization cancelled.")
+                    addLogEntry(LogEntryType.CANCELLED, "Optimization cancelled", detail = "${index} apps completed")
                     _optimizationProgress.value = _optimizationProgress.value.copy(
                         isRunning = false,
                         result = OptimizationResult.Canceled,
@@ -224,6 +235,8 @@ class AdbRepositoryImpl @Inject constructor(
                     currentAppPackage = packageName
                 )
 
+                addLogEntry(LogEntryType.OPTIMIZING, "Optimizing...", packageName = packageName)
+
                 val command = "cmd package compile -m $compileMode -f $packageName"
                 addLog("> $command")
 
@@ -231,6 +244,7 @@ class AdbRepositoryImpl @Inject constructor(
                 result.fold(
                     onSuccess = { output ->
                         addLog("Success: optimized $packageName")
+                        addLogEntry(LogEntryType.SUCCESS, "Optimized", packageName = packageName)
                         // Only log output if it contains more info than just "Success"
                         val trimmed = output.trim()
                         if (trimmed.isNotBlank() && !trimmed.equals("Success", ignoreCase = true)) {
@@ -239,6 +253,7 @@ class AdbRepositoryImpl @Inject constructor(
                     },
                     onFailure = { throwable ->
                         addLog("Failure: $packageName - ${throwable.message}")
+                        addLogEntry(LogEntryType.ERROR, "Failed", packageName = packageName, detail = throwable.message)
                     }
                 )
 
@@ -250,6 +265,7 @@ class AdbRepositoryImpl @Inject constructor(
             }
 
             addLog("✓ Optimization complete! $total apps optimized, $skippedCount skipped.")
+            addLogEntry(LogEntryType.COMPLETE, "Optimization complete!", detail = "$total apps optimized")
 
             _optimizationProgress.value = _optimizationProgress.value.copy(
                 isRunning = false,
@@ -263,6 +279,7 @@ class AdbRepositoryImpl @Inject constructor(
             },
             onFailure = { throwable ->
                 addLog("Optimization failed: ${throwable.message}")
+                addLogEntry(LogEntryType.ERROR, "Optimization failed", detail = throwable.message)
                 _optimizationProgress.value = _optimizationProgress.value.copy(
                     isRunning = false
                 )
@@ -517,12 +534,11 @@ class AdbRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Queries the compilation status for a single package using multiple sources:
-     * 1. dumpsys package - for compiler filter and update times
-     * 2. pm path - to find the APK location
-     * 3. stat on oat/odex files - to get actual file modification times
+     * Queries the compilation status for a single package using a simple approach:
+     * 1. Use `pm compile --check` if available (Android 10+)
+     * 2. Fall back to dumpsys package for compiler filter info
      *
-     * This multi-source approach provides the most reliable optimization detection.
+     * This simplified approach is more reliable than checking oat file timestamps.
      *
      * @param packageName Package to query.
      * @param targetFilter The optimization filter we intend to apply.
@@ -532,198 +548,111 @@ class AdbRepositoryImpl @Inject constructor(
         packageName: String,
         targetFilter: String
     ): AppCompilationInfo {
-        // Query package dump for dexopt info
-        val dumpsysCommand = "dumpsys package $packageName"
-        val dumpsysResult = shellDataSource.executeCommand(dumpsysCommand)
+        // Try the simple compile --check approach first (Android 10+)
+        // This returns the current compilation status directly
+        val checkCommand = "cmd package compile --check $packageName 2>/dev/null"
+        val checkResult = shellDataSource.executeCommand(checkCommand)
 
-        val dumpsysOutput = dumpsysResult.getOrNull() ?: ""
+        var compilerFilter: String? = null
+        var lastUpdateTimeMs: Long? = null
 
-        // Parse basic info from dumpsys
-        val basicInfo = parseBasicCompilationInfo(dumpsysOutput)
+        checkResult.getOrNull()?.let { output ->
+            // Output format varies but often includes the filter like "speed-profile" or "speed"
+            val trimmed = output.trim().lowercase()
+            when {
+                trimmed.contains("speed-profile") -> compilerFilter = "speed-profile"
+                trimmed.contains("everything") -> compilerFilter = "everything"
+                trimmed.contains("speed") && !trimmed.contains("profile") -> compilerFilter = "speed"
+                trimmed.contains("quicken") -> compilerFilter = "quicken"
+                trimmed.contains("verify") -> compilerFilter = "verify"
+                trimmed.contains("extract") -> compilerFilter = "extract"
+            }
+        }
 
-        // Try to get oat file modification time using pm path + stat
-        val oatFileInfo = queryOatFileInfo(packageName)
+        // If --check didn't work, try dumpsys package for just the essential info
+        if (compilerFilter == null) {
+            // Use grep to get only the lines we need - much faster than full dumpsys
+            val grepCommand = "dumpsys package $packageName 2>/dev/null | grep -E '(status=|lastUpdateTime=|firstInstallTime=)' | head -5"
+            val grepResult = shellDataSource.executeCommand(grepCommand)
 
-        // Merge information from both sources
-        val lastCompilationTimeMs = oatFileInfo.modificationTimeMs ?: basicInfo.dexoptTimeMs
-        val oatFileExists = oatFileInfo.exists
+            grepResult.getOrNull()?.lines()?.forEach { line ->
+                val trimmed = line.trim()
+                when {
+                    trimmed.contains("status=") && compilerFilter == null -> {
+                        val match = Regex("""status=(\w+[-\w]*)""").find(trimmed)
+                        compilerFilter = match?.groupValues?.getOrNull(1)
+                    }
+                    trimmed.startsWith("lastUpdateTime=") && lastUpdateTimeMs == null -> {
+                        val timeStr = trimmed.substringAfter("lastUpdateTime=").trim()
+                        lastUpdateTimeMs = parseTimestamp(timeStr)
+                    }
+                    trimmed.startsWith("firstInstallTime=") && lastUpdateTimeMs == null -> {
+                        val timeStr = trimmed.substringAfter("firstInstallTime=").trim()
+                        lastUpdateTimeMs = parseTimestamp(timeStr)
+                    }
+                }
+            }
+        }
 
-        // Evaluate if optimization is needed using the new detailed evaluation
-        val (needsOptimization, skipReason) = AppCompilationInfo.evaluateOptimization(
-            compilerFilter = basicInfo.compilerFilter,
-            lastCompilationTimeMs = lastCompilationTimeMs,
-            lastUpdateTimeMs = basicInfo.lastUpdateTimeMs,
-            targetFilter = targetFilter,
-            oatFileExists = oatFileExists
-        )
+        // Simplified optimization decision:
+        // - If we couldn't determine the filter, assume it needs optimization
+        // - If the filter matches target (speed/speed-profile), it's already optimized
+        // - Otherwise, it needs optimization
+        val needsOptimization: Boolean
+        val skipReason: AppCompilationInfo.SkipReason?
+
+        val filter = compilerFilter // Smart cast helper
+        when {
+            filter == null -> {
+                // Unknown state - optimize it
+                needsOptimization = true
+                skipReason = null
+            }
+            isFilterOptimalForTarget(filter, targetFilter) -> {
+                // Already has the target optimization
+                needsOptimization = false
+                skipReason = AppCompilationInfo.SkipReason.RecentlyOptimized(0, filter)
+            }
+            else -> {
+                // Has a lower quality filter - optimize it
+                needsOptimization = true
+                skipReason = null
+            }
+        }
 
         return AppCompilationInfo(
             packageName = packageName,
-            compilerFilter = basicInfo.compilerFilter,
-            lastCompilationTimeMs = lastCompilationTimeMs,
-            lastUpdateTimeMs = basicInfo.lastUpdateTimeMs,
-            oatFileExists = oatFileExists,
+            compilerFilter = compilerFilter,
+            lastCompilationTimeMs = null, // We don't need this for the decision
+            lastUpdateTimeMs = lastUpdateTimeMs,
+            oatFileExists = compilerFilter != null,
             skipReason = skipReason,
             needsOptimization = needsOptimization
         )
     }
 
     /**
-     * Queries oat/odex file information for a package by finding the APK path
-     * and checking the corresponding oat directory.
+     * Determines if the current compiler filter is optimal for the target filter.
      *
-     * @param packageName Package to query.
-     * @return [OatFileInfo] with file existence and modification time.
+     * @param currentFilter The current compiler filter applied to the app.
+     * @param targetFilter The target filter the user wants to apply.
+     * @return True if the app doesn't need re-optimization.
      */
-    private suspend fun queryOatFileInfo(packageName: String): OatFileInfo {
-        // Get the APK path
-        val pathCommand = "pm path $packageName"
-        val pathResult = shellDataSource.executeCommand(pathCommand)
+    private fun isFilterOptimalForTarget(currentFilter: String, targetFilter: String): Boolean {
+        val current = currentFilter.lowercase()
+        val target = targetFilter.lowercase()
 
-        val apkPath = pathResult.getOrNull()
-            ?.lines()
-            ?.firstOrNull { it.startsWith("package:") }
-            ?.substringAfter("package:")
-            ?.trim()
-            ?: return OatFileInfo(exists = false, modificationTimeMs = null)
+        // "everything" is always optimal
+        if (current == "everything") return true
 
-        // Construct potential oat file paths
-        // Format: /data/app/~~random~~/com.package.name-random==/oat/arm64/base.odex
-        val oatDir = apkPath.substringBeforeLast("/") + "/oat"
+        // "speed" is optimal for both speed and speed-profile targets
+        if (current == "speed" && (target == "speed" || target == "speed-profile")) return true
 
-        // Check for oat files using ls and stat
-        val lsCommand = "ls -la $oatDir 2>/dev/null || echo 'NO_OAT_DIR'"
-        val lsResult = shellDataSource.executeCommand(lsCommand)
+        // "speed-profile" is optimal for speed-profile target
+        if (current == "speed-profile" && target == "speed-profile") return true
 
-        val lsOutput = lsResult.getOrNull() ?: return OatFileInfo(exists = false, modificationTimeMs = null)
-
-        if (lsOutput.contains("NO_OAT_DIR") || lsOutput.contains("No such file")) {
-            return OatFileInfo(exists = false, modificationTimeMs = null)
-        }
-
-        // Find the architecture subdirectory (arm64, arm, x86, etc.)
-        val archDirs = listOf("arm64", "arm", "x86_64", "x86")
-        for (arch in archDirs) {
-            val odexPath = "$oatDir/$arch/base.odex"
-            val statResult = queryFileModificationTime(odexPath)
-            if (statResult != null) {
-                return OatFileInfo(exists = true, modificationTimeMs = statResult)
-            }
-
-            // Also check for .oat files
-            val oatPath = "$oatDir/$arch/base.oat"
-            val oatStatResult = queryFileModificationTime(oatPath)
-            if (oatStatResult != null) {
-                return OatFileInfo(exists = true, modificationTimeMs = oatStatResult)
-            }
-        }
-
-        // Oat directory exists but no odex files found - might be verify-only
-        return OatFileInfo(exists = false, modificationTimeMs = null)
+        return false
     }
-
-    /**
-     * Queries file modification time using stat command.
-     *
-     * @param filePath Path to the file.
-     * @return Modification time in milliseconds, or null if file doesn't exist.
-     */
-    private suspend fun queryFileModificationTime(filePath: String): Long? {
-        // Use stat to get modification time in epoch seconds
-        val statCommand = "stat -c %Y \"$filePath\" 2>/dev/null || echo 'NO_FILE'"
-        val statResult = shellDataSource.executeCommand(statCommand)
-
-        val output = statResult.getOrNull()?.trim() ?: return null
-
-        if (output.contains("NO_FILE") || output.contains("No such file")) {
-            return null
-        }
-
-        // stat -c %Y returns epoch seconds, convert to milliseconds
-        return output.toLongOrNull()?.times(1000L)
-    }
-
-    /**
-     * Internal data class for oat file query results.
-     */
-    private data class OatFileInfo(
-        val exists: Boolean,
-        val modificationTimeMs: Long?
-    )
-
-    /**
-     * Internal data class for basic compilation info parsed from dumpsys.
-     */
-    private data class BasicCompilationInfo(
-        val compilerFilter: String?,
-        val dexoptTimeMs: Long?,
-        val lastUpdateTimeMs: Long?
-    )
-
-    /**
-     * Parses basic compilation info from dumpsys package output.
-     *
-     * @param dumpsysOutput Raw output from dumpsys package command.
-     * @return [BasicCompilationInfo] with parsed details.
-     */
-    private fun parseBasicCompilationInfo(
-        dumpsysOutput: String
-    ): BasicCompilationInfo {
-        var compilerFilter: String? = null
-        var lastUpdateTimeMs: Long? = null
-        var dexoptTimeMs: Long? = null
-
-        val lines = dumpsysOutput.lines()
-
-        for (line in lines) {
-            val trimmed = line.trim()
-
-            // Parse compiler filter - look for various patterns
-            if (compilerFilter == null) {
-                when {
-                    trimmed.contains("status=") -> {
-                        // Format: status=speed or [status=speed-profile]
-                        val match = Regex("""status=(\w+[-\w]*)""").find(trimmed)
-                        compilerFilter = match?.groupValues?.getOrNull(1)
-                    }
-                    trimmed.contains("compiler-filter=") || trimmed.contains("compilationFilter=") -> {
-                        // Alternative format
-                        val match = Regex("""(?:compiler-filter|compilationFilter)=(\w+[-\w]*)""").find(trimmed)
-                        compilerFilter = match?.groupValues?.getOrNull(1)
-                    }
-                }
-            }
-
-            // Parse last update time
-            if (lastUpdateTimeMs == null && trimmed.startsWith("lastUpdateTime=")) {
-                val timeStr = trimmed.substringAfter("lastUpdateTime=").trim()
-                lastUpdateTimeMs = parseTimestamp(timeStr)
-            }
-
-            // Parse firstInstallTime as fallback for lastUpdateTime
-            if (lastUpdateTimeMs == null && trimmed.startsWith("firstInstallTime=")) {
-                val timeStr = trimmed.substringAfter("firstInstallTime=").trim()
-                lastUpdateTimeMs = parseTimestamp(timeStr)
-            }
-
-            // Look for dexopt timestamp patterns
-            if (dexoptTimeMs == null) {
-                if (trimmed.contains("dexopt") && trimmed.contains("time")) {
-                    val match = Regex("""(\d{13,})""").find(trimmed)
-                    match?.groupValues?.getOrNull(1)?.toLongOrNull()?.let { timestamp ->
-                        dexoptTimeMs = timestamp
-                    }
-                }
-            }
-        }
-
-        return BasicCompilationInfo(
-            compilerFilter = compilerFilter,
-            dexoptTimeMs = dexoptTimeMs,
-            lastUpdateTimeMs = lastUpdateTimeMs
-        )
-    }
-
 
     /**
      * Attempts to parse a timestamp string from dumpsys output.
@@ -763,5 +692,44 @@ class AdbRepositoryImpl @Inject constructor(
         val currentList = _commandOutput.value.toMutableList()
         currentList.add(line)
         _commandOutput.value = currentList
+    }
+
+    /**
+     * Adds a structured log entry for beautiful UI rendering.
+     *
+     * @param type The type of log entry.
+     * @param message Human-readable message.
+     * @param packageName Optional package name this entry relates to.
+     * @param detail Optional additional detail.
+     */
+    private fun addLogEntry(
+        type: LogEntryType,
+        message: String,
+        packageName: String? = null,
+        detail: String? = null
+    ) {
+        val entry = OptimizationLogEntry(
+            id = System.nanoTime(),
+            timestamp = System.currentTimeMillis(),
+            type = type,
+            packageName = packageName,
+            message = message,
+            detail = detail
+        )
+        val currentList = _logEntries.value.toMutableList()
+        currentList.add(entry)
+        // Keep only last 100 entries to prevent memory bloat
+        if (currentList.size > 100) {
+            _logEntries.value = currentList.takeLast(100)
+        } else {
+            _logEntries.value = currentList
+        }
+    }
+
+    /**
+     * Clears all log entries. Called when starting a new optimization run.
+     */
+    private fun clearLogEntries() {
+        _logEntries.value = emptyList()
     }
 }
