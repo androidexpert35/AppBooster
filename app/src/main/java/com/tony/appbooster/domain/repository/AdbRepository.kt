@@ -113,4 +113,20 @@ interface AdbRepository {
      * @return [Resource] indicating success or failure.
      */
     suspend fun analyzeOptimizationStatus(mode: AppOptimizationType): Resource<OptimizationAnalysis>
+
+    /**
+     * Clears the latest optimization result and its associated counters.
+     *
+     * Business purpose:
+     * - Keeps the dashboard coherent when the user dismisses a completed/canceled result card.
+     * - Prevents stale run counters (e.g., "20 apps need optimization") from lingering after dismissal.
+     * - Provides a single source of truth reset point for presentation.
+     *
+     * Notes:
+     * - This does not re-run analysis.
+     * - This does not affect the current run if [optimizationProgress] is still running.
+     *
+     * @return [Resource.Success] when the snapshot was cleared, or [Resource.Error] on failure.
+     */
+    suspend fun clearOptimizationResult(): Resource<Unit>
 }

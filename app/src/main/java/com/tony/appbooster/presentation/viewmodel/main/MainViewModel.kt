@@ -7,6 +7,7 @@ import com.tony.appbooster.R
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.model.common.ResourceError
 import com.tony.appbooster.domain.usecase.ConnectAdbUseCase
+import com.tony.appbooster.domain.usecase.DismissOptimizationResultUseCase
 import com.tony.appbooster.domain.usecase.ObserveAdbConnectionStateUseCase
 import com.tony.appbooster.domain.usecase.ObserveAppOptimizationTypeUseCase
 import com.tony.appbooster.domain.usecase.ObserveCommandOutputUseCase
@@ -52,6 +53,7 @@ class MainViewModel @Inject constructor(
     private val observeOptimizationAnalysisUseCase: ObserveOptimizationAnalysisUseCase,
     private val startAnalysisUseCase: StartAnalysisUseCase,
     private val startOptimizationUseCase: StartOptimizationUseCase,
+    private val dismissOptimizationResultUseCase: DismissOptimizationResultUseCase,
     @param:ApplicationContext private val appContext: Context,
     navigationManager: NavigationManager
 ) : BaseViewModel<MainUiModel, MainUiEvent, MainUiEffect>(navigationManager) {
@@ -193,6 +195,15 @@ class MainViewModel @Inject constructor(
         val runId = uiState.value.data?.optimizationProgress?.runId ?: 0L
         if (runId == 0L) return
 
+        // 1) Clear the underlying domain snapshot so no other UI surfaces show stale counts.
+        viewModelScope.launch(exceptionHandler) {
+            when (val result = dismissOptimizationResultUseCase()) {
+                is Resource.Success -> Unit
+                is Resource.Error -> showErrorSnackbar(result.data)
+            }
+        }
+
+        // 2) Keep in-memory dismissal for this runId as an extra guard (e.g., if a worker re-emits).
         dismissedResultRunIds.update { current ->
             if (current.contains(runId)) current else current + runId
         }

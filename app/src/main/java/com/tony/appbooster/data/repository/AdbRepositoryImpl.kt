@@ -1021,4 +1021,37 @@ class AdbRepositoryImpl @Inject constructor(
     private fun clearLogEntries() {
         _logEntries.value = emptyList()
     }
+
+    /**
+     * Clears the last optimization result, resetting progress and statistics.
+     *
+     * This is useful to dismiss the result card and ensure no stale data
+     * is shown in the UI after an optimization run is completed.
+     *
+     * @return Always returns [Resource.Success] since this operation cannot fail.
+     */
+    override suspend fun clearOptimizationResult(): Resource<Unit> {
+        return runCatching {
+            val current = _optimizationProgress.value
+            if (current.isRunning) {
+                // Dismiss should never disrupt an active run; keep state unchanged.
+                return@runCatching
+            }
+
+            // Reset the snapshot so every UI surface stops rendering stale counts.
+            _optimizationProgress.value = OptimizationProgress(
+                runId = 0L,
+                isRunning = false,
+                result = OptimizationResult.None,
+                currentAppPackage = "",
+                progress = 0f,
+                processedCount = 0,
+                skippedCount = 0,
+                totalCount = 0
+            )
+        }.fold(
+            onSuccess = { Resource.Success(Unit) },
+            onFailure = { Resource.Error(ResourceError.LogicError(it.message)) }
+        )
+    }
 }
