@@ -1,5 +1,6 @@
 package com.tony.appbooster.presentation.screen.dashboard.components
 
+import android.graphics.drawable.Drawable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.Spring
@@ -11,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,16 +58,30 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.drawable.toBitmap
 import com.tony.appbooster.domain.model.common.LogEntryType
 import com.tony.appbooster.domain.model.common.OptimizationLogEntry
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+/**
+ * Helper data class for app display information.
+ *
+ * @property icon The app's icon drawable.
+ * @property label The app's display label.
+ */
+private data class AppDisplayInfo(
+    val icon: Drawable,
+    val label: String
+)
 
 /**
  * Beautiful circular progress indicator with smooth animation.
@@ -471,7 +487,7 @@ private fun ActivityLogItem(
 }
 
 /**
- * Current app being optimized card with subtle animation.
+ * Current app being optimized card showing the app icon and details.
  *
  * @param packageName The package name of the app being optimized.
  * @param modifier Modifier for layout customization.
@@ -481,6 +497,23 @@ fun CurrentAppCard(
     packageName: String,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+
+    // Get app icon and label
+    val appInfo = remember(packageName) {
+        if (packageName.isEmpty()) return@remember null
+        try {
+            val pm = context.packageManager
+            val applicationInfo = pm.getApplicationInfo(packageName, 0)
+            AppDisplayInfo(
+                icon = applicationInfo.loadIcon(pm),
+                label = pm.getApplicationLabel(applicationInfo).toString()
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     AnimatedVisibility(
         visible = packageName.isNotEmpty(),
         enter = fadeIn(tween(200)) + slideInVertically { it / 2 },
@@ -497,19 +530,35 @@ fun CurrentAppCard(
                 modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Simple progress indicator
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
+                // App icon or fallback
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 2.dp
                 ) {
-                    androidx.compose.material3.CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.5.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (appInfo?.icon != null) {
+                            Image(
+                                bitmap = appInfo.icon.toBitmap().asImageBitmap(),
+                                contentDescription = appInfo.label,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                            )
+                        } else {
+                            // Fallback icon
+                            Icon(
+                                imageVector = Icons.Rounded.Speed,
+                                contentDescription = null,
+                                modifier = Modifier.size(28.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 }
 
                 Spacer(Modifier.width(16.dp))
@@ -521,7 +570,7 @@ fun CurrentAppCard(
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
                     Text(
-                        text = packageName.substringAfterLast(".").replaceFirstChar { it.uppercase() },
+                        text = appInfo?.label ?: packageName.substringAfterLast(".").replaceFirstChar { it.uppercase() },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
