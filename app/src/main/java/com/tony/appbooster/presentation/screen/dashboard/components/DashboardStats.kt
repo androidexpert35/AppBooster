@@ -1,5 +1,6 @@
 package com.tony.appbooster.presentation.screen.dashboard.components
 
+import android.content.res.Configuration
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,8 +27,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.tony.appbooster.R
+import com.tony.appbooster.presentation.tools.AppBasePreview
+import com.tony.appbooster.presentation.ui.theme.AppBoosterTheme
+import com.tony.appbooster.presentation.ui.theme.paddingMedium
 
 /**
  * Beautiful stats row showing optimization vs skipped apps.
@@ -96,7 +102,8 @@ fun StatCard(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .padding(vertical = paddingMedium),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -112,7 +119,7 @@ fun StatCard(
                 )
                 Text(
                     text = animatedCount.toInt().toString(),
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = contentColor
                 )
@@ -126,5 +133,41 @@ fun StatCard(
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+@AppBasePreview
+@Composable
+private fun OptimizationStatsRowPreview() {
+    AppBoosterTheme {
+        OptimizationStatsRow(
+            needsOptimizationCount = 42,
+            optimizedCount = 180
+        )
+    }
+}
+
+@Preview(name = "Large Font", fontScale = 1.5f, showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_NO)
+@Composable
+private fun OptimizationStatsRowLargeFontPreview() {
+    AppBoosterTheme {
+        OptimizationStatsRow(
+            needsOptimizationCount = 120,
+            optimizedCount = 12
+        )
+    }
+}
+
+@AppBasePreview
+@Composable
+private fun StatCardPreview() {
+    AppBoosterTheme {
+        StatCard(
+            count = 99,
+            label = "Needs optimization",
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            icon = Icons.Rounded.RocketLaunch
+        )
     }
 }
