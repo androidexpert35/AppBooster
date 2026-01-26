@@ -5,12 +5,17 @@ import androidx.lifecycle.viewModelScope
 import com.alkemy.boxapp.presentation.navigation.interfaces.NavigationManager
 import com.tony.appbooster.R
 import com.tony.appbooster.domain.model.common.Resource
-import com.tony.appbooster.domain.repository.AdbRepository
 import com.tony.appbooster.domain.usecase.CancelAnalysisUseCase
 import com.tony.appbooster.domain.usecase.CancelOptimizationUseCase
 import com.tony.appbooster.domain.usecase.ConnectAdbUseCase
+import com.tony.appbooster.domain.usecase.ObserveAdbConnectionStateUseCase
 import com.tony.appbooster.domain.usecase.ObserveAppOptimizationTypeUseCase
+import com.tony.appbooster.domain.usecase.ObserveCommandOutputUseCase
+import com.tony.appbooster.domain.usecase.ObserveOptimizationAnalysisUseCase
+import com.tony.appbooster.domain.usecase.ObserveOptimizationLogEntriesUseCase
+import com.tony.appbooster.domain.usecase.ObserveOptimizationProgressUseCase
 import com.tony.appbooster.domain.usecase.OptimizeAppUseCase
+import com.tony.appbooster.domain.usecase.StartAnalysisUseCase
 import com.tony.appbooster.presentation.viewmodel.base.BaseViewModel
 import com.tony.appbooster.presentation.worker.AnalysisWorker
 import com.tony.appbooster.presentation.worker.OptimizationWorker
@@ -31,7 +36,6 @@ import javax.inject.Inject
  *
  * @param connectAdbUseCase Use case that discovers the wireless debug port and connects to ADB.
  * @param optimizeAppUseCase Use case that triggers ART optimization on the connected device.
- * @param repository Repository exposing ADB connection, logs, and optimization progress.
  * @param navigationManager Manager used to dispatch navigation commands from the ViewModel.
  * @return A ViewModel instance exposing a single `StateFlow<UIState<MainUiModel>>`.
  * @throws IllegalStateException If required dependencies are not provided by DI.
@@ -43,7 +47,12 @@ class MainViewModel @Inject constructor(
     private val cancelOptimizationUseCase: CancelOptimizationUseCase,
     private val cancelAnalysisUseCase: CancelAnalysisUseCase,
     private val getOptimizeAppUseCase: ObserveAppOptimizationTypeUseCase,
-    private val repository: AdbRepository,
+    private val observeAdbConnectionStateUseCase: ObserveAdbConnectionStateUseCase,
+    private val observeCommandOutputUseCase: ObserveCommandOutputUseCase,
+    private val observeOptimizationLogEntriesUseCase: ObserveOptimizationLogEntriesUseCase,
+    private val observeOptimizationProgressUseCase: ObserveOptimizationProgressUseCase,
+    private val observeOptimizationAnalysisUseCase: ObserveOptimizationAnalysisUseCase,
+    private val startAnalysisUseCase: StartAnalysisUseCase,
     @param:ApplicationContext private val appContext: Context,
     navigationManager: NavigationManager
 ) : BaseViewModel<MainUiModel, MainUiEvent, MainUiEffect>(navigationManager) {
@@ -122,23 +131,32 @@ class MainViewModel @Inject constructor(
      */
     private fun observeRepository() {
         viewModelScope.launch(exceptionHandler) {
-            // Use nested combine since Kotlin's combine only supports up to 5 flows
+            val connectionStateFlow = observeAdbConnectionStateUseCase()
+            val commandOutputFlow = observeCommandOutputUseCase()
+            val logEntriesFlow = observeOptimizationLogEntriesUseCase()
+            val progressFlow = observeOptimizationProgressUseCase()
+            val analysisFlow = observeOptimizationAnalysisUseCase()
+
+            // Kotlin's typed combine overloads support up to 5 flows; use nested combine to keep strong types.
             combine(
                 combine(
-                    repository.connectionState,
-                    repository.commandOutput,
-                    repository.logEntries
+                    connectionStateFlow,
+                    commandOutputFlow,
+                    logEntriesFlow
                 ) { connectionState, logs, logEntries ->
                     Triple(connectionState, logs, logEntries)
                 },
                 combine(
-                    repository.optimizationProgress,
-                    repository.optimizationAnalysis,
+                    progressFlow,
+                    analysisFlow,
                     dismissedResultRunIds
                 ) { progress, analysis, dismissedRunIds ->
                     Triple(progress, analysis, dismissedRunIds)
                 }
-            ) { (connectionState, logs, logEntries), (progress, analysis, dismissedRunIds) ->
+            ) { first, second ->
+                val (connectionState, logs, logEntries) = first
+                val (progress, analysis, dismissedRunIds) = second
+
                 MainUiModel(
                     connectionState = connectionState,
                     logs = logs,
@@ -148,7 +166,6 @@ class MainViewModel @Inject constructor(
                     dismissedResultRunIds = dismissedRunIds
                 )
             }.collect { model ->
-                // Reuse BaseViewModel helper to update only data while preserving status.
                 updateUiData(model)
             }
         }
@@ -161,10 +178,15 @@ class MainViewModel @Inject constructor(
     fun triggerAnalysis() {
         val mode = uiState.value.data?.optimizationMode ?: return
         viewModelScope.launch(exceptionHandler) {
-            // First ensure Shizuku is connected
-            val connectionResult = connectAdbUseCase()
-            if (connectionResult is Resource.Success) {
-                AnalysisWorker.enqueue(appContext, mode)
+            when (startAnalysisUseCase(mode)) {
+                is Resource.Success -> Unit
+                is Resource.Error -> {
+                    emitEffect(
+                        MainUiEffect.ShowSnackbar(
+                            appContext.getString(R.string.error_generic_fallback_message)
+                        )
+                    )
+                }
             }
         }
     }

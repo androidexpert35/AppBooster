@@ -8,6 +8,8 @@ import androidx.work.WorkerParameters
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.model.settings.AppOptimizationType
 import com.tony.appbooster.domain.repository.AdbRepository
+import com.tony.appbooster.domain.usecase.EnsureAdbConnectedUseCase
+import com.tony.appbooster.domain.usecase.RunAnalysisUseCase
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
@@ -31,7 +33,9 @@ import kotlinx.coroutines.launch
 class AnalysisWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
-    private val repository: AdbRepository
+    private val repository: AdbRepository,
+    private val ensureAdbConnectedUseCase: EnsureAdbConnectedUseCase,
+    private val runAnalysisUseCase: RunAnalysisUseCase
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result = coroutineScope {
@@ -75,7 +79,7 @@ class AnalysisWorker @AssistedInject constructor(
         }
 
         try {
-            when (repository.ensureConnected()) {
+            when (ensureAdbConnectedUseCase()) {
                 is Resource.Success -> Unit
                 is Resource.Error -> return@coroutineScope Result.failure()
             }
@@ -85,7 +89,7 @@ class AnalysisWorker @AssistedInject constructor(
                 return@coroutineScope Result.success()
             }
 
-            when (repository.analyzeOptimizationStatus(mode)) {
+            when (runAnalysisUseCase(mode)) {
                 is Resource.Success -> Result.success()
                 is Resource.Error -> Result.failure()
             }
