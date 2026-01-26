@@ -218,7 +218,14 @@ private fun DashboardContent(
                 .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            HeroControlPanel(model, onStartOptimization, onStopOptimization, onDismissResult, onAnalyze)
+            // Hide hero card when optimization is running
+            AnimatedVisibility(
+                visible = !model.optimizationProgress.isRunning,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                HeroControlPanel(model, onStartOptimization, onStopOptimization, onDismissResult, onAnalyze)
+            }
 
             // Show beautiful progress when running
             AnimatedVisibility(
@@ -227,10 +234,14 @@ private fun DashboardContent(
                 exit = fadeOut() + shrinkVertically()
             ) {
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    Spacer(Modifier.height(8.dp))
+
                     // Circular progress indicator
                     CircularOptimizationProgress(
                         progress = model.optimizationProgress.progress,
@@ -248,6 +259,13 @@ private fun DashboardContent(
                         skippedCount = model.optimizationProgress.skippedCount,
                         failedCount = 0 // TODO: Track failures
                     )
+
+                    Spacer(Modifier.weight(1f))
+
+                    // Beautiful floating stop button
+                    StopOptimizationButton(onStop = onStopOptimization)
+
+                    Spacer(Modifier.height(24.dp))
                 }
             }
 
@@ -265,11 +283,45 @@ private fun DashboardContent(
                         .padding(bottom = 16.dp)
                 )
             }
+        }
+    }
+}
 
-            // Spacer to fill remaining space when optimization is running
-            if (model.optimizationProgress.isRunning) {
-                Spacer(modifier = Modifier.weight(1f))
-            }
+/**
+ * Beautiful floating stop button with subtle animation.
+ */
+@Composable
+private fun StopOptimizationButton(
+    onStop: () -> Unit
+) {
+    Surface(
+        onClick = onStop,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 40.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+        tonalElevation = 4.dp,
+        shadowElevation = 8.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.StopCircle,
+                contentDescription = stringResource(R.string.dashboard_stop_optimization_cd),
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = stringResource(R.string.action_stop),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
         }
     }
 }
@@ -344,7 +396,7 @@ private fun HeroControlPanel(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 AnimatedContent(
-                    targetState = model.optimizationProgress.isRunning,
+                    targetState = model.optimizationProgress.result,
                     label = "OptimizationStateAnimation",
                     transitionSpec = {
                         (slideInVertically(
@@ -359,12 +411,10 @@ private fun HeroControlPanel(
                             )
                             .using(SizeTransform(clip = false))
                     }
-                ) { isRunning ->
+                ) { result ->
                     when {
-                        isRunning -> OptimizationRunningContent(model = model, onStopOptimization = onStopOptimization)
-
                         // Special case: All apps already optimized (no work was needed)
-                        model.optimizationProgress.result is OptimizationResult.Completed &&
+                        result is OptimizationResult.Completed &&
                                 model.optimizationProgress.processedCount == 0 &&
                                 model.optimizationProgress.skippedCount > 0 &&
                                 !isResultDismissed -> {
@@ -374,7 +424,7 @@ private fun HeroControlPanel(
                             )
                         }
 
-                        model.optimizationProgress.result is OptimizationResult.Completed && !isResultDismissed -> {
+                        result is OptimizationResult.Completed && !isResultDismissed -> {
                             OptimizationCompletedContent(
                                 processedCount = model.optimizationProgress.processedCount,
                                 skippedCount = model.optimizationProgress.skippedCount,
@@ -384,7 +434,7 @@ private fun HeroControlPanel(
                             )
                         }
 
-                        model.optimizationProgress.result is OptimizationResult.Canceled && !isResultDismissed -> {
+                        result is OptimizationResult.Canceled && !isResultDismissed -> {
                             OptimizationCanceledContent(
                                 processedCount = model.optimizationProgress.processedCount,
                                 skippedCount = model.optimizationProgress.skippedCount,
@@ -410,93 +460,6 @@ private fun HeroControlPanel(
     }
 }
 
-/**
- * Expressive running state display with animated icon and stop action.
- * Progress details are shown in the beautiful components below the card.
- *
- * @param model Current screen model containing progress information.
- * @param onStopOptimization Callback when the user requests cancellation.
- */
-@Composable
-private fun OptimizationRunningContent(
-    model: MainUiModel,
-    onStopOptimization: () -> Unit
-) {
-    // Pulsing animation for the icon
-    val infiniteTransition = rememberInfiniteTransition(label = "running")
-    val iconScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = EaseInOutCubic),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "iconScale"
-    )
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        // Animated icon container
-        Surface(
-            modifier = Modifier
-                .size(72.dp)
-                .scale(iconScale),
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            tonalElevation = 4.dp
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Rounded.Speed,
-                    contentDescription = null,
-                    modifier = Modifier.size(36.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        Text(
-            text = stringResource(R.string.dashboard_optimizing_title),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        Text(
-            text = stringResource(R.string.dashboard_optimizing_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
-        )
-
-        // Stop action button
-        FilledTonalButton(
-            onClick = onStopOptimization,
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.filledTonalButtonColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer
-            ),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.StopCircle,
-                contentDescription = stringResource(R.string.dashboard_stop_optimization_cd),
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = stringResource(R.string.action_stop),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-    }
-}
 
 @Composable
 private fun OptimizationReadyContent(
