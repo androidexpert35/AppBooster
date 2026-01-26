@@ -3,7 +3,6 @@ package com.tony.appbooster.presentation.screen.dashboard
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.EaseOutBack
@@ -18,13 +17,12 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,12 +36,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DoNotDisturbOn
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -85,11 +80,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.schedapp.presentation.screen.common.basescreen.ErrorDialogConfig
 import com.tony.appbooster.R
@@ -98,10 +91,7 @@ import com.tony.appbooster.domain.model.settings.AppOptimizationType
 import com.tony.appbooster.presentation.permission.NotificationPermissionManager
 import com.tony.appbooster.presentation.permission.NotificationPermissionRationaleDialog
 import com.tony.appbooster.presentation.screen.common.basescreen.AppBaseScreen
-import com.tony.appbooster.presentation.screen.dashboard.components.CircularOptimizationProgress
-import com.tony.appbooster.presentation.screen.dashboard.components.CurrentAppCard
 import com.tony.appbooster.presentation.screen.dashboard.components.OptimizationActivityFeed
-import com.tony.appbooster.presentation.screen.dashboard.components.OptimizationStatsBar
 import com.tony.appbooster.presentation.viewmodel.main.MainUiEffect
 import com.tony.appbooster.presentation.viewmodel.main.MainUiEvent
 import com.tony.appbooster.presentation.viewmodel.main.MainUiModel
@@ -218,113 +208,21 @@ private fun DashboardContent(
                 .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Hide hero card when optimization is running
-            AnimatedVisibility(
-                visible = !model.optimizationProgress.isRunning,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                HeroControlPanel(model, onStartOptimization, onStopOptimization, onDismissResult, onAnalyze)
-            }
+            // Hero card - always visible, changes content based on state
+            HeroControlPanel(model, onStartOptimization, onStopOptimization, onDismissResult, onAnalyze)
 
-            // Show beautiful progress when running
-            AnimatedVisibility(
-                visible = model.optimizationProgress.isRunning,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Spacer(Modifier.height(8.dp))
-
-                    // Circular progress indicator
-                    CircularOptimizationProgress(
-                        progress = model.optimizationProgress.progress,
-                        processedCount = model.optimizationProgress.processedCount,
-                        totalCount = model.optimizationProgress.totalCount,
-                        currentApp = model.optimizationProgress.currentAppPackage
-                    )
-
-                    // Current app card
-                    CurrentAppCard(packageName = model.optimizationProgress.currentAppPackage)
-
-                    // Stats bar
-                    OptimizationStatsBar(
-                        optimizedCount = model.optimizationProgress.processedCount,
-                        skippedCount = model.optimizationProgress.skippedCount,
-                        failedCount = 0 // TODO: Track failures
-                    )
-
-                    Spacer(Modifier.weight(1f))
-
-                    // Beautiful floating stop button
-                    StopOptimizationButton(onStop = onStopOptimization)
-
-                    Spacer(Modifier.height(24.dp))
-                }
-            }
-
-            // Activity feed - only visible when NOT running
-            AnimatedVisibility(
-                visible = !model.optimizationProgress.isRunning,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                OptimizationActivityFeed(
-                    entries = model.logEntries,
-                    isExpanded = true,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(bottom = 16.dp)
-                )
-            }
-        }
-    }
-}
-
-/**
- * Beautiful floating stop button with subtle animation.
- */
-@Composable
-private fun StopOptimizationButton(
-    onStop: () -> Unit
-) {
-    Surface(
-        onClick = onStop,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 40.dp),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.errorContainer,
-        tonalElevation = 4.dp,
-        shadowElevation = 8.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.StopCircle,
-                contentDescription = stringResource(R.string.dashboard_stop_optimization_cd),
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.onErrorContainer
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = stringResource(R.string.action_stop),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onErrorContainer
+            // Activity feed - always visible
+            OptimizationActivityFeed(
+                entries = model.logEntries,
+                isExpanded = true,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(bottom = 16.dp)
             )
         }
     }
 }
+
 
 /**
  * Hero control panel with gradient background and expressive animations.
@@ -444,6 +342,17 @@ private fun HeroControlPanel(
                             )
                         }
 
+                        // Optimization is running - show progress bar and stop button
+                        model.optimizationProgress.isRunning -> {
+                            OptimizationRunningContent(
+                                progress = model.optimizationProgress.progress,
+                                processedCount = model.optimizationProgress.processedCount,
+                                totalCount = model.optimizationProgress.totalCount,
+                                currentAppPackage = model.optimizationProgress.currentAppPackage,
+                                onStop = onStopOptimization
+                            )
+                        }
+
                         else -> {
                             OptimizationReadyContent(
                                 optimizationMode = model.optimizationMode,
@@ -455,6 +364,118 @@ private fun HeroControlPanel(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Content displayed while optimization is running with horizontal progress bar.
+ */
+@Composable
+private fun OptimizationRunningContent(
+    progress: Float,
+    processedCount: Int,
+    totalCount: Int,
+    currentAppPackage: String,
+    onStop: () -> Unit
+) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(400, easing = EaseOutCubic),
+        label = "progressAnimation"
+    )
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Progress info row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = stringResource(R.string.dashboard_optimizing_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "$processedCount / $totalCount apps",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Percentage badge
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Text(
+                    text = "${(animatedProgress * 100).toInt()}%",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
+
+        // Horizontal progress bar
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(animatedProgress)
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.tertiary
+                            )
+                        )
+                    )
+            )
+        }
+
+        // Stop button - full width
+        Surface(
+            onClick = onStop,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.errorContainer,
+            tonalElevation = 2.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(vertical = 14.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.StopCircle,
+                    contentDescription = stringResource(R.string.dashboard_stop_optimization_cd),
+                    modifier = Modifier.size(22.dp),
+                    tint = MaterialTheme.colorScheme.onErrorContainer
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = stringResource(R.string.action_stop),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
             }
         }
     }
@@ -1032,113 +1053,6 @@ private fun AllOptimizedContent(
     }
 }
 
-/**
- * Terminal output section displaying real-time logs with improved styling.
- */
-@Composable
-private fun TerminalSection(
-    logs: List<String>,
-    listState: androidx.compose.foundation.lazy.LazyListState
-) {
-    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-        // Section header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Terminal,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = stringResource(R.string.dashboard_terminal_section_title),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        // Terminal card with dark theme
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(bottom = 16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF0D1117)  // GitHub-style dark terminal
-            ),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            if (logs.isEmpty()) {
-                // Empty state
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Terminal,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .alpha(0.3f),
-                            tint = Color(0xFF8B949E)
-                        )
-                        Text(
-                            text = stringResource(R.string.dashboard_terminal_empty_title),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFF8B949E)
-                        )
-                        Text(
-                            text = stringResource(R.string.dashboard_terminal_empty_subtitle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF6E7681)
-                        )
-                    }
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    contentPadding = PaddingValues(16.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    // Key MUST be unique. Logs can repeat, so we key by index.
-                    itemsIndexed(
-                        items = logs,
-                        key = { index, _ -> index }
-                    ) { _, log ->
-                        val textColor = when {
-                            log.startsWith(">") -> Color(0xFF58A6FF)  // Blue for commands
-                            log.contains("success", ignoreCase = true) -> Color(0xFF3FB950)  // Green
-                            log.contains("error", ignoreCase = true) -> Color(0xFFF85149)  // Red
-                            log.contains("warning", ignoreCase = true) -> Color(0xFFD29922)  // Yellow
-                            else -> Color(0xFFC9D1D9)  // Default gray
-                        }
-
-                        Text(
-                            text = log,
-                            color = textColor,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp,
-                            lineHeight = 18.sp,
-                            modifier = Modifier.padding(vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
 
 /**
  * Beautiful stats row showing optimization vs skipped apps with animated counters

@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cancel
@@ -369,11 +368,30 @@ fun OptimizationActivityFeed(
 
 /**
  * Single activity log item with expressive styling based on type.
+ * Shows app icon for app-related entries and a tick mark for successfully optimized apps.
  */
 @Composable
 private fun ActivityLogItem(
     entry: OptimizationLogEntry
 ) {
+    val context = LocalContext.current
+
+    // Load app icon if package name is available
+    var appIcon by remember { androidx.compose.runtime.mutableStateOf<android.graphics.Bitmap?>(null) }
+
+    LaunchedEffect(entry.packageName) {
+        entry.packageName?.let { pkg ->
+            try {
+                val pm = context.packageManager
+                val applicationInfo = pm.getApplicationInfo(pkg, 0)
+                val drawable = applicationInfo.loadIcon(pm)
+                appIcon = drawable.toBitmap(width = 64, height = 64)
+            } catch (e: Exception) {
+                appIcon = null
+            }
+        }
+    }
+
     val (icon, color, bgColor) = remember(entry.type) {
         when (entry.type) {
             LogEntryType.SUCCESS -> Triple(
@@ -426,6 +444,10 @@ private fun ActivityLogItem(
 
     val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
+    // Check if this is an app-related entry (has package name)
+    val isAppEntry = entry.packageName != null
+    val isSuccess = entry.type == LogEntryType.SUCCESS
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -434,20 +456,40 @@ private fun ActivityLogItem(
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Icon
+        // Icon - show app icon for app entries, or default icon for other entries
         Box(
             modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(color.copy(alpha = 0.2f)),
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (isAppEntry && appIcon != null) Color.Transparent else color.copy(alpha = 0.2f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = color
-            )
+            if (isAppEntry && appIcon != null) {
+                // Show app icon
+                Image(
+                    bitmap = appIcon!!.asImageBitmap(),
+                    contentDescription = entry.message,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(8.dp))
+                )
+            } else if (isAppEntry) {
+                // Show package initial as fallback
+                Text(
+                    text = entry.packageName?.substringAfterLast(".")?.take(1)?.uppercase() ?: "?",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = color
+                )
+            } else {
+                // Show default icon
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = color
+                )
+            }
         }
 
         Spacer(Modifier.width(12.dp))
@@ -470,6 +512,17 @@ private fun ActivityLogItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+
+        // Success tick mark for optimized apps
+        if (isSuccess) {
+            Icon(
+                imageVector = Icons.Rounded.CheckCircle,
+                contentDescription = "Optimized",
+                modifier = Modifier.size(20.dp),
+                tint = Color(0xFF4CAF50)
+            )
+            Spacer(Modifier.width(8.dp))
         }
 
         // Timestamp
