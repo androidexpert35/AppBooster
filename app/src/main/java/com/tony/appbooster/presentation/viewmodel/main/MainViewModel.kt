@@ -5,10 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.alkemy.boxapp.presentation.navigation.interfaces.NavigationManager
 import com.tony.appbooster.R
 import com.tony.appbooster.domain.model.common.Resource
-import com.tony.appbooster.domain.usecase.CancelAnalysisUseCase
-import com.tony.appbooster.domain.usecase.CancelAnalysisWorkUseCase
-import com.tony.appbooster.domain.usecase.CancelOptimizationUseCase
-import com.tony.appbooster.domain.usecase.CancelOptimizationWorkUseCase
 import com.tony.appbooster.domain.usecase.ConnectAdbUseCase
 import com.tony.appbooster.domain.usecase.ObserveAdbConnectionStateUseCase
 import com.tony.appbooster.domain.usecase.ObserveAppOptimizationTypeUseCase
@@ -16,9 +12,10 @@ import com.tony.appbooster.domain.usecase.ObserveCommandOutputUseCase
 import com.tony.appbooster.domain.usecase.ObserveOptimizationAnalysisUseCase
 import com.tony.appbooster.domain.usecase.ObserveOptimizationLogEntriesUseCase
 import com.tony.appbooster.domain.usecase.ObserveOptimizationProgressUseCase
-import com.tony.appbooster.domain.usecase.OptimizeAppUseCase
 import com.tony.appbooster.domain.usecase.StartAnalysisUseCase
 import com.tony.appbooster.domain.usecase.StartOptimizationUseCase
+import com.tony.appbooster.domain.usecase.StopAnalysisUseCase
+import com.tony.appbooster.domain.usecase.StopOptimizationUseCase
 import com.tony.appbooster.presentation.viewmodel.base.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -36,7 +33,6 @@ import javax.inject.Inject
  * and ART optimization while surfacing progress, logs, and errors to the UI.
  *
  * @param connectAdbUseCase Use case that discovers the wireless debug port and connects to ADB.
- * @param optimizeAppUseCase Use case that triggers ART optimization on the connected device.
  * @param navigationManager Manager used to dispatch navigation commands from the ViewModel.
  * @return A ViewModel instance exposing a single `StateFlow<UIState<MainUiModel>>`.
  * @throws IllegalStateException If required dependencies are not provided by DI.
@@ -44,11 +40,8 @@ import javax.inject.Inject
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val connectAdbUseCase: ConnectAdbUseCase,
-    private val optimizeAppUseCase: OptimizeAppUseCase,
-    private val cancelOptimizationUseCase: CancelOptimizationUseCase,
-    private val cancelAnalysisUseCase: CancelAnalysisUseCase,
-    private val cancelOptimizationWorkUseCase: CancelOptimizationWorkUseCase,
-    private val cancelAnalysisWorkUseCase: CancelAnalysisWorkUseCase,
+    private val stopOptimizationUseCase: StopOptimizationUseCase,
+    private val stopAnalysisUseCase: StopAnalysisUseCase,
     private val getOptimizeAppUseCase: ObserveAppOptimizationTypeUseCase,
     private val observeAdbConnectionStateUseCase: ObserveAdbConnectionStateUseCase,
     private val observeCommandOutputUseCase: ObserveCommandOutputUseCase,
@@ -104,24 +97,6 @@ class MainViewModel @Inject constructor(
             }
         )
     }
-
-    /**
-     * Requests cancellation of an active optimization run.
-     *
-     * The business purpose is to allow the user to stop long-running work
-     * without leaving the UI in a loading state.
-     */
-    fun stopOptimization() {
-        launchUiStateUpdate(
-            dataFetchBlock = { cancelOptimizationUseCase() },
-            skipLoading = true,
-            processSuccess = {
-                // Keep current UI data; progress/logs are emitted from repository flows.
-                uiState.value.data ?: MainUiModel()
-            }
-        )
-    }
-
 
     /**
      * Observes ADB connection, command output and optimization progress from the
@@ -207,12 +182,8 @@ class MainViewModel @Inject constructor(
     }
 
     private fun onStopAnalysisRequested() {
-        // Cancel background work first so the notification is removed immediately.
-        cancelAnalysisWorkUseCase()
-
-        // Also request repository-side cancellation so UI/progress updates instantly.
         launchUiStateUpdate(
-            dataFetchBlock = { cancelAnalysisUseCase() },
+            dataFetchBlock = { stopAnalysisUseCase() },
             skipLoading = true,
             processSuccess = { uiState.value.data ?: MainUiModel() }
         )
@@ -256,10 +227,10 @@ class MainViewModel @Inject constructor(
     }
 
     private fun onStopOptimizationRequested() {
-        // Cancel WorkManager so background execution stops and notification goes away.
-        cancelOptimizationWorkUseCase()
-
-        // Also request repository-side cancellation immediately to update UI/progress flow.
-        stopOptimization()
+        launchUiStateUpdate(
+            dataFetchBlock = { stopOptimizationUseCase() },
+            skipLoading = true,
+            processSuccess = { uiState.value.data ?: MainUiModel() }
+        )
     }
 }
