@@ -127,9 +127,19 @@ class AdbRepositoryImpl @Inject constructor(
                 return@runCatching
             }
 
+            // Mark canceled immediately so UI can render the canceled HeroCard even if WorkManager
+            // cancels the worker before the optimization loop checks the flag.
+            val current = _optimizationProgress.value
+            _optimizationProgress.value = current.copy(
+                isRunning = false,
+                result = OptimizationResult.Canceled,
+                currentAppPackage = "",
+                progress = current.progress.coerceIn(0f, 1f)
+            )
+
             optimizationCancelRequested.set(true)
             addLog("⏹ Cancelling optimization...")
-            addLogEntry(LogEntryType.CANCELLED, "Requesting cancellation...")
+            addLogEntry(LogEntryType.CANCELLED, "Optimization cancelled")
         }.fold(
             onSuccess = { Resource.Success(Unit) },
             onFailure = { Resource.Error(ResourceError.LogicError(it.message)) }
@@ -143,9 +153,15 @@ class AdbRepositoryImpl @Inject constructor(
                 return@runCatching
             }
 
+            // Mark canceled immediately so UI stops showing scanning state right away.
+            _optimizationAnalysis.value = _optimizationAnalysis.value.copy(
+                isScanning = false,
+                currentPackage = ""
+            )
+
             analysisCancelRequested.set(true)
             addLog("⏹ Cancelling analysis...")
-            addLogEntry(LogEntryType.CANCELLED, "Requesting analysis cancellation...")
+            addLogEntry(LogEntryType.CANCELLED, "Analysis cancelled")
         }.fold(
             onSuccess = { Resource.Success(Unit) },
             onFailure = { Resource.Error(ResourceError.LogicError(it.message)) }
@@ -361,11 +377,35 @@ class AdbRepositoryImpl @Inject constructor(
                     }
                 )
 
+                // Cancellation can be requested while executing the compile command; check again before updating progress.
+                if (optimizationCancelRequested.get()) {
+                    addLog("⏹ Optimization cancelled.")
+                    addLogEntry(LogEntryType.CANCELLED, "Optimization cancelled", detail = "${index + 1} apps completed")
+                    _optimizationProgress.value = _optimizationProgress.value.copy(
+                        isRunning = false,
+                        result = OptimizationResult.Canceled,
+                        currentAppPackage = ""
+                    )
+                    return@runCatching
+                }
+
                 val newCount = index + 1
                 _optimizationProgress.value = _optimizationProgress.value.copy(
                     processedCount = newCount,
                     progress = newCount.toFloat() / total.toFloat()
                 )
+            }
+
+            // Final guard: never overwrite a cancellation state with "Completed".
+            if (optimizationCancelRequested.get() || _optimizationProgress.value.result is OptimizationResult.Canceled) {
+                addLog("⏹ Optimization cancelled.")
+                addLogEntry(LogEntryType.CANCELLED, "Optimization cancelled")
+                _optimizationProgress.value = _optimizationProgress.value.copy(
+                    isRunning = false,
+                    result = OptimizationResult.Canceled,
+                    currentAppPackage = ""
+                )
+                return@runCatching
             }
 
             addLog("✓ Optimization complete! $total apps optimized, $skippedCount skipped.")
