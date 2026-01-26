@@ -44,7 +44,7 @@ class AdbShellClientImpl @Inject constructor(
 
         when (currentState) {
             ShizukuState.Ready -> {
-                Log.d(TAG, "Shizuku is ready")
+                // Intentionally no-op: higher layers (repository/UI) handle user-facing logging.
             }
             ShizukuState.NotInstalled -> {
                 throw IllegalStateException(
@@ -72,7 +72,7 @@ class AdbShellClientImpl @Inject constructor(
     override suspend fun executeDetailed(command: String): ShellCommandResult {
         ensureConnected()
 
-        Log.d(TAG, "Executing command: $command")
+        // Do not log commands here to avoid duplicated logs; repositories already log "> <command>".
 
         val result = shizukuClient.execute(command)
 

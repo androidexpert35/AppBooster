@@ -732,13 +732,27 @@ class AdbRepositoryImpl @Inject constructor(
         }
 
         // --- System truth first: cmd package compile --check ---
+        addLogEntry(LogEntryType.ANALYZING, "System check", packageName = packageName, detail = "cmd package compile --check")
+
         val checkCommand = "cmd package compile --check $packageName"
         val checkResult = shellDataSource.executeCommandDetailed(checkCommand)
 
         val check = checkResult.getOrNull()
-        if (check != null && check.isSuccess) {
+        if (check == null) {
+            // Transport-layer error (exception) - surface it and continue.
+            addLogEntry(LogEntryType.ERROR, "System check failed", packageName = packageName, detail = checkResult.exceptionOrNull()?.message)
+        } else if (!check.isSuccess) {
+            val reason = check.stderr.trim().ifEmpty { "exitCode=${check.exitCode}" }
+            addLogEntry(LogEntryType.INFO, "System check unsupported", packageName = packageName, detail = reason)
+        } else {
             val checkOutput = check.stdout.trim()
             DexoptStatusParser.parseCompileCheckNeedsOptimization(checkOutput)?.let { needsOptimizationFromSystem ->
+                addLogEntry(
+                    type = LogEntryType.INFO,
+                    message = "System check result",
+                    packageName = packageName,
+                    detail = if (needsOptimizationFromSystem) "needs optimization" else "already optimal"
+                )
                 return AppCompilationInfo(
                     packageName = packageName,
                     compilerFilter = null,
@@ -749,24 +763,49 @@ class AdbRepositoryImpl @Inject constructor(
                     needsOptimization = needsOptimizationFromSystem
                 )
             }
+            addLogEntry(LogEntryType.INFO, "System check unparseable", packageName = packageName, detail = checkOutput.take(120))
         }
 
         var compilerFilter: String? = null
         var lastUpdateTimeMs: Long? = null
 
-        // Approach 2: Parse global dexopt dump without grep/head (more emulator-safe).
-        // Cache once per run to avoid N expensive calls.
+        // --- Fallback #1: dumpsys package dexopt (cached per run) ---
+        if (cachedDexoptDump == null) {
+            addLogEntry(LogEntryType.ANALYZING, "Fallback: dexopt dump", detail = "dumpsys package dexopt")
+        } else {
+            addLogEntry(LogEntryType.INFO, "Fallback: dexopt dump", detail = "cache hit")
+        }
+
         val dexoptDump = cachedDexoptDump ?: run {
             val dexoptResult = shellDataSource.executeCommandDetailed("dumpsys package dexopt")
-            dexoptResult.getOrNull()?.takeIf { it.isSuccess }?.stdout.also { cachedDexoptDump = it }
-        }
+            val dexopt = dexoptResult.getOrNull()
+
+            if (dexopt == null) {
+                addLogEntry(LogEntryType.ERROR, "Dexopt dump failed", detail = dexoptResult.exceptionOrNull()?.message)
+                null
+            } else if (!dexopt.isSuccess) {
+                addLogEntry(
+                    LogEntryType.ERROR,
+                    "Dexopt dump failed",
+                    detail = dexopt.stderr.trim().ifEmpty { "exitCode=${dexopt.exitCode}" }
+                )
+                null
+            } else {
+                dexopt.stdout
+            }
+        }.also { cachedDexoptDump = it }
 
         if (dexoptDump != null) {
             compilerFilter = DexoptStatusParser.parseCompilerFilterFromDexoptDump(packageName = packageName, dump = dexoptDump)
+            if (compilerFilter != null) {
+                addLogEntry(LogEntryType.INFO, "Dexopt status", packageName = packageName, detail = "filter=$compilerFilter")
+            }
         }
 
-        // Approach 3: If dexopt dump didn't yield a filter, check package dump for dexopt status.
+        // --- Fallback #2: dumpsys package <pkg> parsing (only when needed) ---
         if (compilerFilter == null) {
+            addLogEntry(LogEntryType.ANALYZING, "Fallback: package dump", packageName = packageName, detail = "dumpsys package")
+
             val packageDumpCommand = "dumpsys package $packageName"
             val packageResult = shellDataSource.executeCommand(packageDumpCommand)
 
@@ -784,19 +823,37 @@ class AdbRepositoryImpl @Inject constructor(
                         }
                     }
                 }
+
+                if (compilerFilter != null) {
+                    addLogEntry(LogEntryType.INFO, "Dexopt status", packageName = packageName, detail = "filter=$compilerFilter")
+                } else {
+                    addLogEntry(LogEntryType.INFO, "Package dump", packageName = packageName, detail = "no compiler filter reported")
+                }
+            } ?: run {
+                addLogEntry(LogEntryType.ERROR, "Package dump failed", packageName = packageName, detail = packageResult.exceptionOrNull()?.message)
             }
         }
 
-        // Approach 4: As a last resort, check if oat files exist for this package.
-        // NOTE: This is a heuristic only; file access may be restricted.
+        // --- Fallback #3: oat file heuristic ---
         if (compilerFilter == null) {
-            val oatCheckCommand = "ls /data/app/*$packageName*/oat/arm64/*.odex || ls /data/app/*$packageName*/oat/arm/*.odex"
+            addLogEntry(LogEntryType.ANALYZING, "Fallback: oat scan", packageName = packageName, detail = "ls /data/app/.../oat")
+            val oatCheckCommand =
+                "ls /data/app/*$packageName*/oat/arm64/*.odex || ls /data/app/*$packageName*/oat/arm/*.odex"
             val oatResult = shellDataSource.executeCommand(oatCheckCommand)
 
             oatResult.getOrNull()?.let { output ->
-                if (output.trim().isNotEmpty() && !output.contains("No such file", ignoreCase = true) && !output.contains("Permission denied", ignoreCase = true)) {
+                if (
+                    output.trim().isNotEmpty() &&
+                    !output.contains("No such file", ignoreCase = true) &&
+                    !output.contains("Permission denied", ignoreCase = true)
+                ) {
                     compilerFilter = "unknown-optimized"
+                    addLogEntry(LogEntryType.INFO, "OAT files found", packageName = packageName)
+                } else {
+                    addLogEntry(LogEntryType.INFO, "OAT files not accessible", packageName = packageName)
                 }
+            } ?: run {
+                addLogEntry(LogEntryType.ERROR, "OAT scan failed", packageName = packageName, detail = oatResult.exceptionOrNull()?.message)
             }
         }
 
@@ -818,19 +875,21 @@ class AdbRepositoryImpl @Inject constructor(
             // IMPORTANT: we only skip when we have strong signals this is an overlay/RRO. Otherwise we keep
             // treating it as needing optimization so we don't hide real system apps.
             filter == "unknown-present" -> {
-                val dump = cachedPackageDumps[packageName] ?: run {
-                    val dumpResult = shellDataSource.executeCommand("dumpsys package $packageName")
-                    dumpResult.getOrNull()?.also { cachedPackageDumps[packageName] = it }
+                val pkg = packageName
+                val dump = cachedPackageDumps[pkg] ?: run {
+                    val dumpResult = shellDataSource.executeCommand("dumpsys package $pkg")
+                    dumpResult.getOrNull()?.also { cachedPackageDumps[pkg] = it }
                 }
-                val isOverlayLike = PackageClassifier.isOverlayLike(packageName = packageName, dumpsysPackageOutput = dump)
+                val isOverlayLike = PackageClassifier.isOverlayLike(packageName = pkg, dumpsysPackageOutput = dump)
 
                 if (isOverlayLike) {
                     needsOptimization = false
                     skipReason = AppCompilationInfo.SkipReason.AlreadyOptimal("overlay/rro")
+                    addLogEntry(LogEntryType.INFO, "Overlay classification", packageName = pkg, detail = "Confirmed as overlay/RRO")
                 } else {
-                    // We cannot prove it's an overlay, so keep it eligible.
                     needsOptimization = true
                     skipReason = null
+                    addLogEntry(LogEntryType.INFO, "Overlay classification", packageName = pkg, detail = "Not an overlay → keep eligible")
                 }
             }
 
@@ -906,30 +965,6 @@ class AdbRepositoryImpl @Inject constructor(
             null
         }
     }
-
-    /**
-     * Heuristic to identify packages that are very likely overlay / RRO style artifacts.
-     *
-     * Business purpose:
-     * - Prevents analysis from reporting hundreds of false positives coming from overlay packages.
-     * - Keeps real system apps (SystemUI, Settings, etc.) eligible for optimization.
-     *
-     * @param packageName Candidate package.
-     * @return True if the package name strongly suggests an overlay/RRO artifact.
-     */
-    // Remove outdated name-only heuristic (superseded by PackageClassifier + dumpsys parsing).
-    // private fun isLikelyOverlayPackage(packageName: String): Boolean {
-    //     val lower = packageName.lowercase()
-
-    //     // Strong signals found on AOSP/GMS images:
-    //     // - `*.overlay*`
-    //     // - `*.rro*`
-    //     // - `*auto_generated_rro*`
-    //     if ("overlay" in lower) return true
-    //     if ("rro" in lower) return true
-
-    //     return false
-    // }
 
     /**
      * Appends a new log entry to the internal command output history so

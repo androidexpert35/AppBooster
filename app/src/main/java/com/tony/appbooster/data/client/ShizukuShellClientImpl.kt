@@ -279,7 +279,8 @@ class ShizukuShellClientImpl @Inject constructor(
         }
 
         serviceMutex.withLock {
-            Log.d(TAG, "Executing command: $command")
+            // NOTE: Avoid duplicate logging. AdbShellClientImpl already logs the command.
+            // Log.d(TAG, "Executing command: $command")
 
             val service = shellService
             if (service != null) {
@@ -317,25 +318,23 @@ class ShizukuShellClientImpl @Inject constructor(
             return@flow
         }
 
-        // For streaming, we execute the full command and emit lines
-        val result = execute(command)
-        if (result.isSuccess) {
-            result.output.lineSequence()
-                .filter { it.isNotEmpty() }
-                .forEach { line ->
-                    emit(Result.success(line))
-                }
-        } else {
-            emit(Result.failure(RuntimeException(result.error)))
-        }
-    }
+        // For streaming, execute once and emit lines.
+        val result = runCatching { execute(command) }
+            .getOrElse { throwable ->
+                emit(Result.failure(throwable))
+                return@flow
+            }
 
-    override fun openShizukuInstallPage() {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            data = "https://shizuku.rikka.app/download/".toUri()
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (!result.isSuccess) {
+            emit(Result.failure(IllegalStateException(result.error.ifBlank { "Command failed" })))
+            return@flow
         }
-        context.startActivity(intent)
+
+        result.output
+            .lineSequence()
+            .map { it.trimEnd() }
+            .filter { it.isNotBlank() }
+            .forEach { line -> emit(Result.success(line)) }
     }
 
     override fun openShizukuApp() {
@@ -348,9 +347,23 @@ class ShizukuShellClientImpl @Inject constructor(
         }
     }
 
+    override fun openShizukuInstallPage() {
+        val intent = Intent(Intent.ACTION_VIEW, "market://details?id=$SHIZUKU_PACKAGE".toUri())
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { context.startActivity(intent) }
+            .onFailure {
+                val webIntent = Intent(
+                    Intent.ACTION_VIEW,
+                    "https://play.google.com/store/apps/details?id=$SHIZUKU_PACKAGE".toUri()
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(webIntent)
+            }
+    }
+
     companion object {
         private const val TAG = "ShizukuShellClient"
         private const val SHIZUKU_PACKAGE = "moe.shizuku.privileged.api"
         private const val PERMISSION_REQUEST_CODE = 1001
     }
 }
+
