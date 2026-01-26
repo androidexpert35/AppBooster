@@ -28,4 +28,9 @@ sealed interface MainUiEvent {
      * Requests dismissing the optimization result card (completed/canceled) for the latest run.
      */
     data object OnDismissOptimizationResultClicked : MainUiEvent
+
+    /**
+     * Requests a pre-optimization analysis scan to determine which apps need optimization.
+     */
+    data object OnAnalyzeAppsClicked : MainUiEvent
 }

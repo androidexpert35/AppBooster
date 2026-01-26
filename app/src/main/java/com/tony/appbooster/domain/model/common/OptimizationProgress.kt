@@ -16,6 +16,7 @@ package com.tony.appbooster.domain.model.common
  * @property currentAppPackage The package name of the app currently being optimized.
  * @property progress Progress value from 0.0 to 1.0.
  * @property processedCount Number of apps already optimized.
+ * @property skippedCount Number of apps skipped (already optimized recently).
  * @property totalCount Total number of apps to optimize.
  */
 data class OptimizationProgress(
@@ -25,6 +26,7 @@ data class OptimizationProgress(
     val currentAppPackage: String = "",
     val progress: Float = 0f,
     val processedCount: Int = 0,
+    val skippedCount: Int = 0,
     val totalCount: Int = 0
 )
 

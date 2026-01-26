@@ -164,6 +164,7 @@ fun DashboardScreen(viewModel: MainViewModel) {
             },
             onStopOptimization = { viewModel.onEvent(MainUiEvent.OnStopOptimizationClicked) },
             onDismissResult = { viewModel.onEvent(MainUiEvent.OnDismissOptimizationResultClicked) },
+            onAnalyze = { viewModel.onEvent(MainUiEvent.OnAnalyzeAppsClicked) },
             snackbarHostState = snackbarHostState
         )
     }
@@ -176,6 +177,7 @@ private fun DashboardContent(
     onStartOptimization: () -> Unit,
     onStopOptimization: () -> Unit,
     onDismissResult: () -> Unit,
+    onAnalyze: () -> Unit,
     snackbarHostState: SnackbarHostState
 ) {
     val listState = rememberLazyListState()
@@ -217,7 +219,7 @@ private fun DashboardContent(
                 .padding(padding)
                 .fillMaxSize()
         ) {
-            HeroControlPanel(model, onStartOptimization, onStopOptimization, onDismissResult)
+            HeroControlPanel(model, onStartOptimization, onStopOptimization, onDismissResult, onAnalyze)
             TerminalSection(model.logs, listState)
         }
     }
@@ -232,7 +234,8 @@ private fun HeroControlPanel(
     model: MainUiModel,
     onStartOptimization: () -> Unit,
     onStopOptimization: () -> Unit,
-    onDismissResult: () -> Unit
+    onDismissResult: () -> Unit,
+    onAnalyze: () -> Unit
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val tertiaryColor = MaterialTheme.colorScheme.tertiary
@@ -311,9 +314,21 @@ private fun HeroControlPanel(
                     when {
                         isRunning -> OptimizationRunningContent(model = model, onStopOptimization = onStopOptimization)
 
+                        // Special case: All apps already optimized (no work was needed)
+                        model.optimizationProgress.result is OptimizationResult.Completed &&
+                                model.optimizationProgress.processedCount == 0 &&
+                                model.optimizationProgress.skippedCount > 0 &&
+                                !isResultDismissed -> {
+                            AllOptimizedContent(
+                                skippedCount = model.optimizationProgress.skippedCount,
+                                onDismiss = onDismissResult
+                            )
+                        }
+
                         model.optimizationProgress.result is OptimizationResult.Completed && !isResultDismissed -> {
                             OptimizationCompletedContent(
                                 processedCount = model.optimizationProgress.processedCount,
+                                skippedCount = model.optimizationProgress.skippedCount,
                                 totalCount = model.optimizationProgress.totalCount,
                                 onDismiss = onDismissResult,
                                 onRunAgain = onStartOptimization
@@ -323,6 +338,7 @@ private fun HeroControlPanel(
                         model.optimizationProgress.result is OptimizationResult.Canceled && !isResultDismissed -> {
                             OptimizationCanceledContent(
                                 processedCount = model.optimizationProgress.processedCount,
+                                skippedCount = model.optimizationProgress.skippedCount,
                                 totalCount = model.optimizationProgress.totalCount,
                                 onDismiss = onDismissResult,
                                 onRunAgain = onStartOptimization
@@ -332,7 +348,9 @@ private fun HeroControlPanel(
                         else -> {
                             OptimizationReadyContent(
                                 optimizationMode = model.optimizationMode,
-                                onStartOptimization = onStartOptimization
+                                analysis = model.optimizationAnalysis,
+                                onStartOptimization = onStartOptimization,
+                                onAnalyze = onAnalyze
                             )
                         }
                     }
@@ -522,7 +540,9 @@ private fun OptimizationRunningContent(
 @Composable
 private fun OptimizationReadyContent(
     optimizationMode: AppOptimizationType,
-    onStartOptimization: () -> Unit
+    analysis: com.tony.appbooster.domain.model.common.OptimizationAnalysis,
+    onStartOptimization: () -> Unit,
+    onAnalyze: () -> Unit
 ) {
     // Subtle floating animation for the icon
     val infiniteTransition = rememberInfiniteTransition(label = "idle")
@@ -534,6 +554,17 @@ private fun OptimizationReadyContent(
             repeatMode = RepeatMode.Reverse
         ),
         label = "iconOffset"
+    )
+
+    // Scanning animation
+    val scanningAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = EaseInOutCubic),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scanningAlpha"
     )
 
     // Dynamic content based on optimization mode
@@ -550,65 +581,145 @@ private fun OptimizationReadyContent(
         )
     }
 
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Animated icon
-        Surface(
-            modifier = Modifier
-                .size(64.dp)
-                .graphicsLayer { translationY = iconOffset },
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            tonalElevation = 4.dp
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(32.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+            // Animated icon
+            Surface(
+                modifier = Modifier
+                    .size(64.dp)
+                    .graphicsLayer { translationY = iconOffset },
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                tonalElevation = 4.dp
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Column(horizontalAlignment = Alignment.End) {
+                FilledTonalButton(
+                    onClick = onStartOptimization,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.action_start),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
 
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        Column(horizontalAlignment = Alignment.End) {
-            FilledTonalButton(
-                onClick = onStartOptimization,
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
+        // Pre-scan analysis section
+        when {
+            analysis.isScanning -> {
+                // Scanning in progress
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .alpha(scanningAlpha),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = stringResource(R.string.analysis_scanning_subtitle),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            analysis.hasScanned -> {
+                // Show analysis results
+                OptimizationStatsRow(
+                    optimizedCount = analysis.appsNeedingOptimization,
+                    skippedCount = analysis.appsAlreadyOptimized
                 )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = stringResource(R.string.action_start),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
+            }
+            else -> {
+                // Not scanned yet - show scan button
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable(onClick = onAnalyze),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Speed,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.analysis_scanning_title),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = stringResource(R.string.analysis_tap_to_scan),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -618,6 +729,7 @@ private fun OptimizationReadyContent(
  * Expressive completion panel displayed after a successful optimization run.
  *
  * @param processedCount Number of optimized apps.
+ * @param skippedCount Number of apps skipped (already optimized recently).
  * @param totalCount Total apps targeted by the run.
  * @param onDismiss Callback to hide this panel until the next run.
  * @param onRunAgain Callback to start optimization again.
@@ -625,6 +737,7 @@ private fun OptimizationReadyContent(
 @Composable
 private fun OptimizationCompletedContent(
     processedCount: Int,
+    skippedCount: Int,
     totalCount: Int,
     onDismiss: () -> Unit,
     onRunAgain: () -> Unit
@@ -678,8 +791,19 @@ private fun OptimizationCompletedContent(
             ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 18.dp)
+            modifier = Modifier.padding(top = 4.dp)
         )
+
+        // Smart optimization stats card
+        if (skippedCount > 0) {
+            Spacer(Modifier.height(16.dp))
+            OptimizationStatsRow(
+                optimizedCount = processedCount,
+                skippedCount = skippedCount
+            )
+        }
+
+        Spacer(Modifier.height(18.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -717,6 +841,7 @@ private fun OptimizationCompletedContent(
  * - Provides a clear next action (run again) without implying the run succeeded.
  *
  * @param processedCount Number of apps optimized before cancellation.
+ * @param skippedCount Number of apps skipped (already optimized recently).
  * @param totalCount Total apps targeted by the run.
  * @param onDismiss Callback to hide this panel until the next run.
  * @param onRunAgain Callback to start optimization again.
@@ -724,6 +849,7 @@ private fun OptimizationCompletedContent(
 @Composable
 private fun OptimizationCanceledContent(
     processedCount: Int,
+    skippedCount: Int,
     totalCount: Int,
     onDismiss: () -> Unit,
     onRunAgain: () -> Unit
@@ -777,8 +903,19 @@ private fun OptimizationCanceledContent(
             ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 18.dp)
+            modifier = Modifier.padding(top = 4.dp)
         )
+
+        // Smart optimization stats card
+        if (skippedCount > 0 || processedCount > 0) {
+            Spacer(Modifier.height(16.dp))
+            OptimizationStatsRow(
+                optimizedCount = processedCount,
+                skippedCount = skippedCount
+            )
+        }
+
+        Spacer(Modifier.height(18.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -804,6 +941,129 @@ private fun OptimizationCanceledContent(
             ) {
                 Text(stringResource(R.string.action_dismiss))
             }
+        }
+    }
+}
+
+/**
+ * Celebratory content displayed when all apps are already optimized.
+ *
+ * Business purpose:
+ * - Provides positive feedback when the device is already at peak performance.
+ * - Shows the count of apps that were analyzed and found to be optimal.
+ *
+ * @param skippedCount Number of apps that are already optimized.
+ * @param onDismiss Callback to hide this panel.
+ */
+@Composable
+private fun AllOptimizedContent(
+    skippedCount: Int,
+    onDismiss: () -> Unit
+) {
+    // Celebratory animation
+    val infiniteTransition = rememberInfiniteTransition(label = "allOptimized")
+    val iconScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = EaseInOutCubic),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "iconScale"
+    )
+
+    // Subtle glow effect rotation
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = EaseInOutCubic),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glowAlpha"
+    )
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Celebratory icon with glow effect
+        Box(contentAlignment = Alignment.Center) {
+            // Glow ring
+            Surface(
+                modifier = Modifier
+                    .size(88.dp)
+                    .scale(iconScale)
+                    .alpha(glowAlpha),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+            ) {}
+
+            // Main icon
+            Surface(
+                modifier = Modifier
+                    .size(72.dp)
+                    .scale(iconScale),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                tonalElevation = 6.dp
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(42.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        Text(
+            text = stringResource(R.string.analysis_all_optimized_title),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Text(
+            text = stringResource(R.string.analysis_all_optimized_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+        )
+
+        // Stats badge
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.tertiaryContainer
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Speed,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Text(
+                    text = stringResource(R.string.analysis_apps_already_optimized, skippedCount),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        TextButton(onClick = onDismiss) {
+            Text(stringResource(R.string.action_dismiss))
         }
     }
 }
@@ -915,3 +1175,107 @@ private fun TerminalSection(
         }
     }
 }
+
+/**
+ * Beautiful stats row showing optimization vs skipped apps with animated counters
+ * and expressive visual indicators.
+ *
+ * @param optimizedCount Number of apps that were optimized.
+ * @param skippedCount Number of apps skipped because they were already optimized.
+ */
+@Composable
+private fun OptimizationStatsRow(
+    optimizedCount: Int,
+    skippedCount: Int
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Optimized apps stat card
+        StatCard(
+            modifier = Modifier.weight(1f),
+            count = optimizedCount,
+            label = stringResource(R.string.analysis_card_needs_optimization),
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            icon = Icons.Rounded.RocketLaunch
+        )
+
+        // Already optimized apps stat card
+        StatCard(
+            modifier = Modifier.weight(1f),
+            count = skippedCount,
+            label = stringResource(R.string.analysis_card_optimized),
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            icon = Icons.Rounded.CheckCircle
+        )
+    }
+}
+
+/**
+ * Individual stat card with animated count display and icon.
+ *
+ * @param modifier Modifier for layout customization.
+ * @param count The numerical value to display.
+ * @param label Descriptive label for the stat.
+ * @param containerColor Background color of the card.
+ * @param contentColor Color for text and icons.
+ * @param icon Icon to display alongside the count.
+ */
+@Composable
+private fun StatCard(
+    modifier: Modifier = Modifier,
+    count: Int,
+    label: String,
+    containerColor: Color,
+    contentColor: Color,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    // Animate the count value for a polished entrance effect
+    val animatedCount by animateFloatAsState(
+        targetValue = count.toFloat(),
+        animationSpec = tween(600, easing = EaseOutCubic),
+        label = "countAnimation"
+    )
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = containerColor,
+        tonalElevation = 2.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = contentColor
+                )
+                Text(
+                    text = animatedCount.toInt().toString(),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = contentColor
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = contentColor.copy(alpha = 0.8f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+

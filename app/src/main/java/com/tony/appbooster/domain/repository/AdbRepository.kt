@@ -1,5 +1,6 @@
 package com.tony.appbooster.domain.repository
 
+import com.tony.appbooster.domain.model.common.OptimizationAnalysis
 import com.tony.appbooster.domain.model.common.OptimizationProgress
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.model.settings.AppOptimizationType
@@ -80,4 +81,23 @@ interface AdbRepository {
     suspend fun executeOptimizationCommand(
         mode: AppOptimizationType
     ): Resource<Unit>
+
+    /**
+     * Exposes the result of pre-optimization analysis, showing how many
+     * apps need optimization vs are already optimized.
+     *
+     * @return [StateFlow] emitting [OptimizationAnalysis] snapshots.
+     */
+    val optimizationAnalysis: StateFlow<OptimizationAnalysis>
+
+    /**
+     * Analyzes all installed apps to determine which need optimization.
+     *
+     * This is a lightweight scan that checks compilation status without
+     * actually performing optimization. Results are exposed via [optimizationAnalysis].
+     *
+     * @param mode The optimization mode to analyze against.
+     * @return [Resource] indicating success or failure.
+     */
+    suspend fun analyzeOptimizationStatus(mode: AppOptimizationType): Resource<OptimizationAnalysis>
 }

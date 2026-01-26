@@ -192,4 +192,22 @@
     <!-- Bottom navigation -->
     <string name="nav_dashboard">Dashboard</string>
     <string name="nav_settings">Settings</string>
+
+    <!-- Optimization analysis -->
+    <string name="analysis_scanning_title">Analyzing Apps</string>
+    <string name="analysis_scanning_subtitle">Checking optimization status...</string>
+    <string name="analysis_tap_to_scan">Tap to scan apps</string>
+    <string name="analysis_complete_title">Analysis Complete</string>
+    <string name="analysis_apps_need_optimization">%1$d apps need optimization</string>
+    <string name="analysis_apps_already_optimized">%1$d apps already optimized</string>
+    <string name="analysis_all_optimized_title">All Apps Optimized!</string>
+    <string name="analysis_all_optimized_subtitle">Your device is already running at peak performance</string>
+    <string name="analysis_last_optimized">Optimized %1$d days ago</string>
+    <string name="analysis_never_optimized">Never optimized</string>
+    <string name="analysis_recently_updated">Recently updated</string>
+    <string name="analysis_skip_reason_recent">Recently optimized</string>
+    <string name="analysis_skip_reason_optimal">Already optimal</string>
+    <string name="analysis_card_needs_optimization">Needs Optimization</string>
+    <string name="analysis_card_optimized">Optimized</string>
+    <string name="analysis_view_details">View Details</string>
 </resources>

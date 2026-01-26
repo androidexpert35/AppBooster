@@ -121,17 +121,34 @@ class MainViewModel @Inject constructor(
                 repository.connectionState,
                 repository.commandOutput,
                 repository.optimizationProgress,
+                repository.optimizationAnalysis,
                 dismissedResultRunIds
-            ) { connectionState, logs, progress, dismissedRunIds ->
+            ) { connectionState, logs, progress, analysis, dismissedRunIds ->
                 MainUiModel(
                     connectionState = connectionState,
                     logs = logs,
                     optimizationProgress = progress,
+                    optimizationAnalysis = analysis,
                     dismissedResultRunIds = dismissedRunIds
                 )
             }.collect { model ->
                 // Reuse BaseViewModel helper to update only data while preserving status.
                 updateUiData(model)
+            }
+        }
+    }
+
+    /**
+     * Triggers a pre-optimization analysis scan to determine which apps need optimization.
+     * This is called automatically when the dashboard loads.
+     */
+    fun triggerAnalysis() {
+        val mode = uiState.value.data?.optimizationMode ?: return
+        viewModelScope.launch(exceptionHandler) {
+            // First ensure Shizuku is connected
+            val connectionResult = connectAdbUseCase()
+            if (connectionResult is Resource.Success) {
+                repository.analyzeOptimizationStatus(mode)
             }
         }
     }
@@ -142,6 +159,7 @@ class MainViewModel @Inject constructor(
             MainUiEvent.OnStartOptimizationClicked -> onStartOptimizationRequested()
             MainUiEvent.OnStopOptimizationClicked -> onStopOptimizationRequested()
             MainUiEvent.OnDismissOptimizationResultClicked -> onDismissOptimizationResultRequested()
+            MainUiEvent.OnAnalyzeAppsClicked -> triggerAnalysis()
         }
     }
 
