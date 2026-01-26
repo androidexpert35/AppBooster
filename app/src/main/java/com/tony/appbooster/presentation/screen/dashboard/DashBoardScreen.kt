@@ -506,6 +506,12 @@ private fun OptimizationReadyContent(
     onStartOptimization: () -> Unit,
     onAnalyze: () -> Unit
 ) {
+    // Show minimal scanning UI when analyzing
+    if (analysis.isScanning) {
+        ScanningContent()
+        return
+    }
+
     // Subtle floating animation for the icon
     val infiniteTransition = rememberInfiniteTransition(label = "idle")
     val iconOffset by infiniteTransition.animateFloat(
@@ -518,16 +524,6 @@ private fun OptimizationReadyContent(
         label = "iconOffset"
     )
 
-    // Scanning animation
-    val scanningAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = EaseInOutCubic),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scanningAlpha"
-    )
 
     // Dynamic content based on optimization mode
     val (title, description, icon) = when (optimizationMode) {
@@ -629,33 +625,6 @@ private fun OptimizationReadyContent(
 
         // Pre-scan analysis section
         when {
-            analysis.isScanning -> {
-                // Scanning in progress
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .alpha(scanningAlpha),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        androidx.compose.material3.CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = stringResource(R.string.analysis_scanning_subtitle),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
             analysis.hasScanned -> {
                 // Show analysis results
                 OptimizationStatsRow(
@@ -700,6 +669,59 @@ private fun OptimizationReadyContent(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Minimal and beautiful scanning state content.
+ */
+@Composable
+private fun ScanningContent() {
+    val infiniteTransition = rememberInfiniteTransition(label = "scanning")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = EaseInOutCubic),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Animated search icon
+        Surface(
+            modifier = Modifier.size(48.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = pulseAlpha),
+            tonalElevation = 2.dp
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.5.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.analysis_scanning_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = stringResource(R.string.analysis_scanning_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulseAlpha)
+            )
         }
     }
 }

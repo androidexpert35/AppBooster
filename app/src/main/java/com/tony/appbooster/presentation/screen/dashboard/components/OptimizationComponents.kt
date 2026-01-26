@@ -277,10 +277,10 @@ fun OptimizationActivityFeed(
 ) {
     val listState = rememberLazyListState()
 
-    // Auto-scroll to latest entry
+    // Auto-scroll to latest entry (bottom of list)
     LaunchedEffect(entries.size) {
         if (entries.isNotEmpty()) {
-            listState.animateScrollToItem(0)
+            listState.animateScrollToItem(entries.size - 1)
         }
     }
 
@@ -355,8 +355,7 @@ fun OptimizationActivityFeed(
                     state = listState,
                     modifier = if (isExpanded) Modifier.weight(1f) else Modifier.height(200.dp),
                     contentPadding = PaddingValues(vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    reverseLayout = true // Show newest at top
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(
                         items = entries.takeLast(50), // Keep last 50 entries
@@ -365,7 +364,7 @@ fun OptimizationActivityFeed(
                         AnimatedVisibility(
                             visible = true,
                             enter = slideInVertically(
-                                initialOffsetY = { -it },
+                                initialOffsetY = { it },
                                 animationSpec = spring(stiffness = Spring.StiffnessMedium)
                             ) + fadeIn() + scaleIn(initialScale = 0.9f)
                         ) {
@@ -503,94 +502,115 @@ fun CurrentAppCard(
     packageName: String,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-
-    // Get app icon and label
-    val appInfo = remember(packageName) {
-        if (packageName.isEmpty()) return@remember null
-        try {
-            val pm = context.packageManager
-            val applicationInfo = pm.getApplicationInfo(packageName, 0)
-            AppDisplayInfo(
-                icon = applicationInfo.loadIcon(pm),
-                label = pm.getApplicationLabel(applicationInfo).toString()
-            )
-        } catch (e: Exception) {
-            null
-        }
-    }
-
     AnimatedVisibility(
         visible = packageName.isNotEmpty(),
         enter = fadeIn(tween(200)) + slideInVertically { it / 2 },
         exit = fadeOut(tween(150))
     ) {
-        Surface(
+        CurrentAppCardContent(
+            packageName = packageName,
             modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.primaryContainer
+        )
+    }
+}
+
+/**
+ * Internal content for CurrentAppCard, separated to ensure proper recomposition.
+ */
+@Composable
+private fun CurrentAppCardContent(
+    packageName: String,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+
+    // Use produceState to properly handle async icon loading with recomposition
+    val appInfo by androidx.compose.runtime.produceState<AppDisplayInfo?>(
+        initialValue = null,
+        key1 = packageName
+    ) {
+        value = if (packageName.isEmpty()) {
+            null
+        } else {
+            try {
+                val pm = context.packageManager
+                val applicationInfo = pm.getApplicationInfo(packageName, 0)
+                AppDisplayInfo(
+                    icon = applicationInfo.loadIcon(pm),
+                    label = pm.getApplicationLabel(applicationInfo).toString()
+                )
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // App icon or fallback
+            Surface(
+                modifier = Modifier.size(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 2.dp
             ) {
-                // App icon or fallback
-                Surface(
-                    modifier = Modifier.size(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 2.dp
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (appInfo?.icon != null) {
-                            Image(
-                                bitmap = appInfo.icon.toBitmap().asImageBitmap(),
-                                contentDescription = appInfo.label,
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                            )
-                        } else {
-                            // Fallback icon
-                            Icon(
-                                imageVector = Icons.Rounded.Speed,
-                                contentDescription = null,
-                                modifier = Modifier.size(28.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                    val icon = appInfo?.icon
+                    if (icon != null) {
+                        Image(
+                            bitmap = icon.toBitmap(width = 80, height = 80).asImageBitmap(),
+                            contentDescription = appInfo?.label,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                    } else {
+                        // Fallback icon
+                        Icon(
+                            imageVector = Icons.Rounded.Speed,
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
+            }
 
-                Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(16.dp))
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Optimizing",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    )
-                    Text(
-                        text = appInfo?.label ?: packageName.substringAfterLast(".").replaceFirstChar { it.uppercase() },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = packageName,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Optimizing",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                )
+                Text(
+                    text = appInfo?.label ?: packageName.substringAfterLast(".").replaceFirstChar { it.uppercase() },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = packageName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
