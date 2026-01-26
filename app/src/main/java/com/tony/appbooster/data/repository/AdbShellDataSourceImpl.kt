@@ -3,6 +3,7 @@ package com.tony.appbooster.data.repository
 
 import com.tony.appbooster.domain.client.AdbShellClient
 import com.tony.appbooster.domain.client.AdbShellDataSource
+import com.tony.appbooster.domain.model.common.ShellCommandResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
@@ -47,5 +48,19 @@ class AdbShellDataSourceImpl @Inject constructor(
         adbClient.stream(command).collect { lineResult ->
             emit(lineResult)
         }
+    }
+
+    /**
+     * Executes a command and returns the result as a [ShellCommandResult]
+     * object, providing detailed information about the command execution.
+     *
+     * @param command Shell command to be executed.
+     * @return [Result] with [ShellCommandResult] containing detailed output
+     * or failure if the client fails.
+     */
+    override suspend fun executeCommandDetailed(
+        command: String
+    ): Result<ShellCommandResult> = runCatching {
+        adbClient.executeDetailed(command)
     }
 }

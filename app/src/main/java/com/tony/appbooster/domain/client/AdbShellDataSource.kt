@@ -1,5 +1,6 @@
 package com.tony.appbooster.domain.client
 
+import com.tony.appbooster.domain.model.common.ShellCommandResult
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -31,4 +32,18 @@ interface AdbShellDataSource {
     suspend fun streamCommand(
         command: String
     ): Flow<Result<String>>
+
+    /**
+     * Executes the provided shell command and returns full process details.
+     *
+     * Business purpose:
+     * - Enables robust feature logic that depends on command support/exit codes.
+     * - Avoids misclassifying "unsupported command" as "app needs optimization".
+     *
+     * @param command Shell command to be executed on the remote device.
+     * @return [Result] containing [ShellCommandResult] on success.
+     */
+    suspend fun executeCommandDetailed(
+        command: String
+    ): Result<ShellCommandResult>
 }

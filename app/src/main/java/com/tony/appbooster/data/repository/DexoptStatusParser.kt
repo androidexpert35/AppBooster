@@ -40,23 +40,49 @@ internal object DexoptStatusParser {
     }
 
     /**
+     * Checks whether the given package appears in a dexopt dump at all.
+     *
+     * Some Android builds omit compiler-filter lines for overlay/system packages.
+     * In those cases, presence alone is a useful signal that the system is aware
+     * of dexopt state, even if details are not reported.
+     */
+    fun isPackagePresentInDexoptDump(packageName: String, dump: String): Boolean {
+        if (dump.isBlank()) return false
+
+        // Match common bracketed forms:
+        // - "[com.example.app]"
+        // - "Dexopt state:\n  [com.example.app]"
+        // - "Dexopt state:  [com.example.app]"
+        val needle = "[$packageName]"
+        return dump.contains(needle)
+    }
+
+    /**
      * Parses compiler filter for a package from the full `dumpsys package dexopt` output.
      *
-     * @param packageName Target package name.
-     * @param dump Full dumpsys output.
-     * @return Normalized filter string (e.g., "speed-profile", "speed", "everything") or null.
+     * Supports multiple formats across Android versions:
+     * - Explicit filter lines (compiler-filter=speed-profile)
+     * - Status annotations ([status=speed])
+     * - Newer builds that only list the package in a "Dexopt state" section without details
+     *   (in this case returns "unknown-present").
      */
     fun parseCompilerFilterFromDexoptDump(packageName: String, dump: String): String? {
         val lines = dump.lineSequence().toList()
-        val idx = lines.indexOfFirst { it.contains(packageName) }
+
+        // Prefer the first occurrence of the package name in bracketed form
+        val bracketed = "[$packageName]"
+        val idx = lines.indexOfFirst { it.contains(bracketed) || it.contains(packageName) }
         if (idx < 0) return null
 
-        val window = lines.subList(idx, minOf(idx + 20, lines.size))
+        val window = lines.subList(idx, minOf(idx + 30, lines.size))
         for (line in window) {
             val lower = line.trim().lowercase()
             parseCompilerFilterFromLine(lower)?.let { return it }
         }
-        return null
+
+        // If we can see the package in a Dexopt state section but no filter lines are provided,
+        // return a marker so callers can treat it differently from "not found".
+        return if (isPackagePresentInDexoptDump(packageName, dump)) "unknown-present" else null
     }
 
     /**

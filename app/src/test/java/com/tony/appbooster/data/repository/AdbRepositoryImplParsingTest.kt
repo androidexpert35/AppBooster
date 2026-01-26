@@ -1,6 +1,7 @@
 package com.tony.appbooster.data.repository
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -67,6 +68,28 @@ class AdbRepositoryImplParsingTest {
         assertEquals(
             "speed",
             DexoptStatusParser.parseCompilerFilterFromDexoptDump("com.example.app", dump)
+        )
+    }
+
+    @Test
+    fun `given dexopt dump with only bracketed package when parseCompilerFilterFromDexoptDump then returns unknown-present`() {
+        val dump = """
+            Dexopt state:
+              [com.android.systemui.auto_generated_rro_product__]
+        """.trimIndent()
+
+        assertEquals(
+            "unknown-present",
+            DexoptStatusParser.parseCompilerFilterFromDexoptDump(
+                packageName = "com.android.systemui.auto_generated_rro_product__",
+                dump = dump
+            )
+        )
+        assertTrue(
+            DexoptStatusParser.isPackagePresentInDexoptDump(
+                packageName = "com.android.systemui.auto_generated_rro_product__",
+                dump = dump
+            )
         )
     }
 }

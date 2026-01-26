@@ -1,5 +1,6 @@
 package com.tony.appbooster.domain.client
 
+import com.tony.appbooster.domain.model.common.ShellCommandResult
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -46,4 +47,20 @@ interface AdbShellClient {
      * @return A Flow emitting lines of output or a Result failure.
      */
     fun stream(command: String): Flow<Result<String>>
+
+    /**
+     * Executes a single shell command and returns detailed process information.
+     *
+     * Business purpose:
+     * - Supports features that must differentiate between "unsupported command" and
+     *   a successful execution with empty output.
+     *
+     * Implementations should return a non-zero [ShellCommandResult.exitCode] when the
+     * command fails.
+     *
+     * @param command The shell command to execute.
+     * @return Detailed result including exit code, stdout, and stderr.
+     * @throws IllegalStateException if not connected.
+     */
+    suspend fun executeDetailed(command: String): ShellCommandResult
 }

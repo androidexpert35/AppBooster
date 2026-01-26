@@ -68,6 +68,15 @@ class AdbRepositoryImpl @Inject constructor(
     private val recentlyOptimizedPackages = mutableMapOf<String, Long>()
 
     /**
+     * Cached output of `dumpsys package dexopt` for the current analysis run.
+     *
+     * Business purpose:
+     * - Avoids running an expensive global dump for every package.
+     * - Significantly improves emulator performance and reduces timeouts.
+     */
+    private var cachedDexoptDump: String? = null
+
+    /**
      * Ensures Shizuku is ready and validates shell access with a health check.
      *
      * @return [Resource.Success] when ready, or [Resource.Error] with details.
@@ -192,6 +201,9 @@ class AdbRepositoryImpl @Inject constructor(
             // Reset cancellation for a new run and clear previous logs
             optimizationCancelRequested.set(false)
             clearLogEntries()
+
+            // Reset per-run caches
+            cachedDexoptDump = null
 
             addLogEntry(LogEntryType.START, "Starting optimization", detail = "Mode: $compileMode")
 
@@ -418,6 +430,9 @@ class AdbRepositoryImpl @Inject constructor(
 
             // Clear previous log entries for a fresh analysis view
             clearLogEntries()
+
+            // Reset per-run caches
+            cachedDexoptDump = null
 
             _optimizationAnalysis.value = _optimizationAnalysis.value.copy(isScanning = true)
 
@@ -707,34 +722,37 @@ class AdbRepositoryImpl @Inject constructor(
         }
 
         // --- System truth first: cmd package compile --check ---
-        // Some Android versions support this and it's the closest thing to authoritative "needs compile".
-        // Important: do not rely on shell redirection here (2>/dev/null) because many environments don't support it.
         val checkCommand = "cmd package compile --check $packageName"
-        val checkResult = shellDataSource.executeCommand(checkCommand)
-        val checkOutput = checkResult.getOrNull()?.trim().orEmpty()
+        val checkResult = shellDataSource.executeCommandDetailed(checkCommand)
 
-        DexoptStatusParser.parseCompileCheckNeedsOptimization(checkOutput)?.let { needsOptimizationFromSystem ->
-            return AppCompilationInfo(
-                packageName = packageName,
-                compilerFilter = null,
-                lastCompilationTimeMs = null,
-                lastUpdateTimeMs = null,
-                oatFileExists = false,
-                skipReason = if (needsOptimizationFromSystem) null else AppCompilationInfo.SkipReason.AlreadyOptimal("system-check"),
-                needsOptimization = needsOptimizationFromSystem
-            )
+        val check = checkResult.getOrNull()
+        if (check != null && check.isSuccess) {
+            val checkOutput = check.stdout.trim()
+            DexoptStatusParser.parseCompileCheckNeedsOptimization(checkOutput)?.let { needsOptimizationFromSystem ->
+                return AppCompilationInfo(
+                    packageName = packageName,
+                    compilerFilter = null,
+                    lastCompilationTimeMs = null,
+                    lastUpdateTimeMs = null,
+                    oatFileExists = false,
+                    skipReason = if (needsOptimizationFromSystem) null else AppCompilationInfo.SkipReason.AlreadyOptimal("system-check"),
+                    needsOptimization = needsOptimizationFromSystem
+                )
+            }
         }
 
         var compilerFilter: String? = null
         var lastUpdateTimeMs: Long? = null
 
         // Approach 2: Parse global dexopt dump without grep/head (more emulator-safe).
-        // This can be large, but it's still usually manageable; we only do it after --check isn't available.
-        val dexoptCommand = "dumpsys package dexopt"
-        val dexoptResult = shellDataSource.executeCommand(dexoptCommand)
+        // Cache once per run to avoid N expensive calls.
+        val dexoptDump = cachedDexoptDump ?: run {
+            val dexoptResult = shellDataSource.executeCommandDetailed("dumpsys package dexopt")
+            dexoptResult.getOrNull()?.takeIf { it.isSuccess }?.stdout.also { cachedDexoptDump = it }
+        }
 
-        dexoptResult.getOrNull()?.let { output ->
-            compilerFilter = DexoptStatusParser.parseCompilerFilterFromDexoptDump(packageName = packageName, dump = output)
+        if (dexoptDump != null) {
+            compilerFilter = DexoptStatusParser.parseCompilerFilterFromDexoptDump(packageName = packageName, dump = dexoptDump)
         }
 
         // Approach 3: If dexopt dump didn't yield a filter, check package dump for dexopt status.
@@ -781,6 +799,13 @@ class AdbRepositoryImpl @Inject constructor(
             filter == null -> {
                 needsOptimization = true
                 skipReason = null
+            }
+
+            // Some Android builds only tell us that a package is present in the Dexopt state section
+            // (common for overlays / system resource packages). Treat these as not optimizable.
+            filter == "unknown-present" -> {
+                needsOptimization = false
+                skipReason = AppCompilationInfo.SkipReason.AlreadyOptimal("system-package")
             }
 
             filter == "unknown-optimized" -> {

@@ -3,6 +3,7 @@ package com.tony.appbooster.data.client
 import android.util.Log
 import com.tony.appbooster.domain.client.AdbShellClient
 import com.tony.appbooster.domain.client.ShizukuShellClient
+import com.tony.appbooster.domain.model.common.ShellCommandResult
 import com.tony.appbooster.domain.model.shizuku.ShizukuState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -68,7 +69,7 @@ class AdbShellClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun execute(command: String): String {
+    override suspend fun executeDetailed(command: String): ShellCommandResult {
         ensureConnected()
 
         Log.d(TAG, "Executing command: $command")
@@ -79,7 +80,16 @@ class AdbShellClientImpl @Inject constructor(
             Log.e(TAG, "Command failed with exit code ${result.exitCode}: ${result.error}")
         }
 
-        return result.output
+        return ShellCommandResult(
+            exitCode = result.exitCode,
+            stdout = result.output,
+            stderr = result.error
+        )
+    }
+
+    override suspend fun execute(command: String): String {
+        // Preserve existing behavior for callers that only need stdout.
+        return executeDetailed(command).stdout
     }
 
     override fun stream(command: String): Flow<Result<String>> {
