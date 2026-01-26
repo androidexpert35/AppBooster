@@ -706,107 +706,94 @@ class AdbRepositoryImpl @Inject constructor(
             }
         }
 
-        var compilerFilter: String? = null
-        var lastUpdateTimeMs: Long? = null
+        // --- System truth first: cmd package compile --check ---
+        // Some Android versions support this and it's the closest thing to authoritative "needs compile".
+        // Important: do not rely on shell redirection here (2>/dev/null) because many environments don't support it.
+        val checkCommand = "cmd package compile --check $packageName"
+        val checkResult = shellDataSource.executeCommand(checkCommand)
+        val checkOutput = checkResult.getOrNull()?.trim().orEmpty()
 
-        // Approach 1: Use dumpsys package dexopt to get the actual dexopt state
-        // This is more reliable than compile --check
-        val dexoptCommand = "dumpsys package dexopt | grep -A 2 '$packageName' | head -5"
-        val dexoptResult = shellDataSource.executeCommand(dexoptCommand)
-
-        dexoptResult.fold(
-            onSuccess = { output ->
-                val trimmed = output.trim().lowercase()
-                // Look for compilation status indicators
-                when {
-                    trimmed.contains("speed-profile") -> compilerFilter = "speed-profile"
-                    trimmed.contains("everything") -> compilerFilter = "everything"
-                    trimmed.contains("[status=speed]") ||
-                        (trimmed.contains("speed") && !trimmed.contains("profile") && !trimmed.contains("speed-profile")) ->
-                        compilerFilter = "speed"
-                    trimmed.contains("quicken") -> compilerFilter = "quicken"
-                    trimmed.contains("verify") -> compilerFilter = "verify"
-                    trimmed.contains("run-from-apk") || trimmed.contains("extract") -> compilerFilter = "extract"
-                }
-            },
-            onFailure = { /* Silently continue to next approach */ }
-        )
-
-        // Approach 2: If dexopt dump didn't work, check package info for dexopt status
-        if (compilerFilter == null) {
-            val packageDumpCommand = "dumpsys package $packageName 2>/dev/null | grep -E '(dexopt|compiler|Dexopt|status=|lastUpdateTime=)' | head -10"
-            val packageResult = shellDataSource.executeCommand(packageDumpCommand)
-
-            packageResult.fold(
-                onSuccess = { output ->
-                    output.lines().forEach { line ->
-                        val trimmed = line.trim().lowercase()
-                        when {
-                            // Look for dexopt status line
-                            compilerFilter == null && (trimmed.contains("status=") || trimmed.contains("compiler")) -> {
-                                when {
-                                    trimmed.contains("speed-profile") -> compilerFilter = "speed-profile"
-                                    trimmed.contains("everything") -> compilerFilter = "everything"
-                                    trimmed.contains("speed") && !trimmed.contains("profile") -> compilerFilter = "speed"
-                                    trimmed.contains("quicken") -> compilerFilter = "quicken"
-                                    trimmed.contains("verify") -> compilerFilter = "verify"
-                                }
-                            }
-                            // Parse update time
-                            trimmed.startsWith("lastupdatetime=") && lastUpdateTimeMs == null -> {
-                                val timeStr = line.substringAfter("=").trim()
-                                lastUpdateTimeMs = parseTimestamp(timeStr)
-                            }
-                        }
-                    }
-                },
-                onFailure = { /* Silently continue to next approach */ }
+        DexoptStatusParser.parseCompileCheckNeedsOptimization(checkOutput)?.let { needsOptimizationFromSystem ->
+            return AppCompilationInfo(
+                packageName = packageName,
+                compilerFilter = null,
+                lastCompilationTimeMs = null,
+                lastUpdateTimeMs = null,
+                oatFileExists = false,
+                skipReason = if (needsOptimizationFromSystem) null else AppCompilationInfo.SkipReason.AlreadyOptimal("system-check"),
+                needsOptimization = needsOptimizationFromSystem
             )
         }
 
-        // Approach 3: As a last resort, check if oat files exist for this package
+        var compilerFilter: String? = null
+        var lastUpdateTimeMs: Long? = null
+
+        // Approach 2: Parse global dexopt dump without grep/head (more emulator-safe).
+        // This can be large, but it's still usually manageable; we only do it after --check isn't available.
+        val dexoptCommand = "dumpsys package dexopt"
+        val dexoptResult = shellDataSource.executeCommand(dexoptCommand)
+
+        dexoptResult.getOrNull()?.let { output ->
+            compilerFilter = DexoptStatusParser.parseCompilerFilterFromDexoptDump(packageName = packageName, dump = output)
+        }
+
+        // Approach 3: If dexopt dump didn't yield a filter, check package dump for dexopt status.
         if (compilerFilter == null) {
-            val oatCheckCommand = "ls /data/app/*$packageName*/oat/arm64/*.odex 2>/dev/null || ls /data/app/*$packageName*/oat/arm/*.odex 2>/dev/null"
+            val packageDumpCommand = "dumpsys package $packageName"
+            val packageResult = shellDataSource.executeCommand(packageDumpCommand)
+
+            packageResult.getOrNull()?.let { output ->
+                output.lineSequence().forEach { line ->
+                    val trimmedLower = line.trim().lowercase()
+                    when {
+                        compilerFilter == null && (trimmedLower.contains("status=") || trimmedLower.contains("compiler") || trimmedLower.contains("compilerfilter") || trimmedLower.contains("compiler-filter")) -> {
+                            compilerFilter = DexoptStatusParser.parseCompilerFilterFromLine(trimmedLower)
+                        }
+
+                        trimmedLower.startsWith("lastupdatetime=") && lastUpdateTimeMs == null -> {
+                            val timeStr = line.substringAfter("=").trim()
+                            lastUpdateTimeMs = parseTimestamp(timeStr)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Approach 4: As a last resort, check if oat files exist for this package.
+        // NOTE: This is a heuristic only; file access may be restricted.
+        if (compilerFilter == null) {
+            val oatCheckCommand = "ls /data/app/*$packageName*/oat/arm64/*.odex || ls /data/app/*$packageName*/oat/arm/*.odex"
             val oatResult = shellDataSource.executeCommand(oatCheckCommand)
 
             oatResult.getOrNull()?.let { output ->
-                if (output.trim().isNotEmpty() && !output.contains("No such file")) {
-                    // OAT file exists, likely optimized but we don't know the filter
-                    // Assume it's at least been compiled
+                if (output.trim().isNotEmpty() && !output.contains("No such file", ignoreCase = true) && !output.contains("Permission denied", ignoreCase = true)) {
                     compilerFilter = "unknown-optimized"
                 }
             }
         }
 
         // Decision logic:
-        // - If we found "speed-profile", "speed", or "everything" -> already optimized
-        // - If we found "unknown-optimized" -> check if we should re-optimize based on target
-        // - If we found lower quality filters or nothing -> needs optimization
         val needsOptimization: Boolean
         val skipReason: AppCompilationInfo.SkipReason?
 
         val filter = compilerFilter
         when {
             filter == null -> {
-                // No compilation info found - optimize it
                 needsOptimization = true
                 skipReason = null
             }
+
             filter == "unknown-optimized" -> {
-                // We know it's optimized but don't know the filter
-                // For speed-profile target, assume it needs optimization
-                // For speed target, skip it
                 needsOptimization = targetFilter.lowercase() == "speed-profile"
-                skipReason = if (needsOptimization) null else
-                    AppCompilationInfo.SkipReason.RecentlyOptimized(0, "compiled")
+                skipReason = if (needsOptimization) null else AppCompilationInfo.SkipReason.RecentlyOptimized(0, "compiled")
             }
+
             isFilterOptimalForTarget(filter, targetFilter) -> {
-                // Already has the target optimization
                 needsOptimization = false
                 skipReason = AppCompilationInfo.SkipReason.RecentlyOptimized(0, filter)
             }
+
             else -> {
-                // Has a lower quality filter - optimize it
                 needsOptimization = true
                 skipReason = null
             }
