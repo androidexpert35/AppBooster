@@ -31,13 +31,13 @@ import com.tony.appbooster.R
 /**
  * Beautiful stats row showing optimization vs skipped apps.
  *
- * @param optimizedCount Number of apps that were optimized.
- * @param skippedCount Number of apps skipped because they were already optimized.
+ * @param needsOptimizationCount Number of apps that still need optimization.
+ * @param optimizedCount Number of apps already optimized.
  */
 @Composable
 fun OptimizationStatsRow(
-    optimizedCount: Int,
-    skippedCount: Int
+    needsOptimizationCount: Int,
+    optimizedCount: Int
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -45,7 +45,7 @@ fun OptimizationStatsRow(
     ) {
         StatCard(
             modifier = Modifier.weight(1f),
-            count = optimizedCount,
+            count = needsOptimizationCount,
             label = stringResource(R.string.analysis_card_needs_optimization),
             containerColor = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -54,7 +54,7 @@ fun OptimizationStatsRow(
 
         StatCard(
             modifier = Modifier.weight(1f),
-            count = skippedCount,
+            count = optimizedCount,
             label = stringResource(R.string.analysis_card_optimized),
             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,

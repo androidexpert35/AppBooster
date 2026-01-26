@@ -111,8 +111,8 @@ fun OptimizationCompletedContent(
         if (skippedCount > 0) {
             Spacer(Modifier.height(16.dp))
             OptimizationStatsRow(
-                optimizedCount = processedCount,
-                skippedCount = skippedCount
+                needsOptimizationCount = 0,
+                optimizedCount = processedCount + skippedCount
             )
         }
 
@@ -217,8 +217,8 @@ fun OptimizationCanceledContent(
         if (skippedCount > 0 || processedCount > 0) {
             Spacer(Modifier.height(16.dp))
             OptimizationStatsRow(
-                optimizedCount = processedCount,
-                skippedCount = skippedCount
+                needsOptimizationCount = (totalCount - (processedCount + skippedCount)).coerceAtLeast(0),
+                optimizedCount = processedCount + skippedCount
             )
         }
 

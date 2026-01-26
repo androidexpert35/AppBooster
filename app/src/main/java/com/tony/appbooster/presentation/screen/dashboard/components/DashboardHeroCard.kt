@@ -334,8 +334,8 @@ private fun ReadyContent(
         when {
             analysis.hasScanned -> {
                 OptimizationStatsRow(
-                    optimizedCount = analysis.appsNeedingOptimization,
-                    skippedCount = analysis.appsAlreadyOptimized
+                    needsOptimizationCount = analysis.appsNeedingOptimization,
+                    optimizedCount = analysis.appsAlreadyOptimized
                 )
             }
 
