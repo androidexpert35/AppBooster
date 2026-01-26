@@ -6,6 +6,8 @@ import com.alkemy.boxapp.presentation.navigation.interfaces.NavigationManager
 import com.tony.appbooster.R
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.repository.AdbRepository
+import com.tony.appbooster.domain.usecase.CancelAnalysisUseCase
+import com.tony.appbooster.domain.usecase.CancelOptimizationUseCase
 import com.tony.appbooster.domain.usecase.ConnectAdbUseCase
 import com.tony.appbooster.domain.usecase.ObserveAppOptimizationTypeUseCase
 import com.tony.appbooster.domain.usecase.OptimizeAppUseCase
@@ -38,6 +40,8 @@ import javax.inject.Inject
 class MainViewModel @Inject constructor(
     private val connectAdbUseCase: ConnectAdbUseCase,
     private val optimizeAppUseCase: OptimizeAppUseCase,
+    private val cancelOptimizationUseCase: CancelOptimizationUseCase,
+    private val cancelAnalysisUseCase: CancelAnalysisUseCase,
     private val getOptimizeAppUseCase: ObserveAppOptimizationTypeUseCase,
     private val repository: AdbRepository,
     @param:ApplicationContext private val appContext: Context,
@@ -96,7 +100,7 @@ class MainViewModel @Inject constructor(
      */
     fun stopOptimization() {
         launchUiStateUpdate(
-            dataFetchBlock = { repository.cancelOptimization() },
+            dataFetchBlock = { cancelOptimizationUseCase() },
             skipLoading = true,
             processSuccess = {
                 // Keep current UI data; progress/logs are emitted from repository flows.
@@ -179,7 +183,7 @@ class MainViewModel @Inject constructor(
     private fun onStopAnalysisRequested() {
         AnalysisWorker.cancel(appContext)
         launchUiStateUpdate(
-            dataFetchBlock = { repository.cancelAnalysis() },
+            dataFetchBlock = { cancelAnalysisUseCase() },
             skipLoading = true,
             processSuccess = {
                 uiState.value.data ?: MainUiModel()

@@ -1,23 +1,13 @@
 package com.tony.appbooster.presentation.worker
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.os.Build
-import androidx.core.app.NotificationCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
-import androidx.work.ForegroundInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.tony.appbooster.R
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.model.settings.AppOptimizationType
 import com.tony.appbooster.domain.repository.AdbRepository
-import com.tony.appbooster.presentation.activity.MainActivity
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
@@ -55,10 +45,16 @@ class OptimizationWorker @AssistedInject constructor(
 
         val mode = parseOptimizationMode(optimizationModeRaw) ?: return@coroutineScope Result.failure()
 
-        createNotificationChannelIfNeeded()
+        WorkForegroundNotificationHelper.ensureChannel(applicationContext)
 
         // Start foreground immediately.
-        setForeground(createForegroundInfo(currentPackage = null))
+        setForeground(
+            WorkForegroundNotificationHelper.createForegroundInfo(
+                context = applicationContext,
+                workId = id.toString(),
+                currentLabel = null
+            )
+        )
 
         // Update notification whenever the current package changes.
         val notificationJob: Job = launch {
@@ -66,7 +62,13 @@ class OptimizationWorker @AssistedInject constructor(
                 .map { it.currentAppPackage }
                 .distinctUntilChangedBy { it }
                 .collect { currentPackage ->
-                    setForeground(createForegroundInfo(currentPackage = currentPackage.ifBlank { null }))
+                    setForeground(
+                        WorkForegroundNotificationHelper.createForegroundInfo(
+                            context = applicationContext,
+                            workId = id.toString(),
+                            currentLabel = currentPackage.ifBlank { null }
+                        )
+                    )
                 }
         }
 
@@ -94,73 +96,6 @@ class OptimizationWorker @AssistedInject constructor(
         }
     }
 
-    private fun createForegroundInfo(currentPackage: String?): ForegroundInfo {
-        val notification = buildNotification(currentPackage)
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ForegroundInfo(
-                NOTIFICATION_ID,
-                notification,
-                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-            )
-        } else {
-            ForegroundInfo(NOTIFICATION_ID, notification)
-        }
-    }
-
-    private fun buildNotification(currentPackage: String?): Notification {
-        val title = applicationContext.getString(R.string.app_name)
-        val contentText = currentPackage?.takeIf { it.isNotBlank() }
-            ?: applicationContext.getString(R.string.optimization_notification_preparing)
-
-        val contentIntent = PendingIntent.getActivity(
-            applicationContext,
-            0,
-            Intent(applicationContext, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val stopIntent = Intent(applicationContext, OptimizationWorkerStopReceiver::class.java)
-            .putExtra(OptimizationWorkerStopReceiver.EXTRA_WORK_ID, id.toString())
-
-        val stopPendingIntent = PendingIntent.getBroadcast(
-            applicationContext,
-            0,
-            stopIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        return NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(title)
-            .setContentText(contentText)
-            .setOnlyAlertOnce(true)
-            .setOngoing(true)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setContentIntent(contentIntent)
-            .addAction(
-                NotificationCompat.Action(
-                    0,
-                    applicationContext.getString(R.string.optimization_notification_stop),
-                    stopPendingIntent
-                )
-            )
-            .build()
-    }
-
-    private fun createNotificationChannelIfNeeded() {
-        val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        val channel = NotificationChannel(
-            NOTIFICATION_CHANNEL_ID,
-            applicationContext.getString(R.string.optimization_notification_channel_name),
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = applicationContext.getString(R.string.optimization_notification_channel_description)
-        }
-
-        manager.createNotificationChannel(channel)
-    }
-
     private fun parseOptimizationMode(value: String): AppOptimizationType? {
         return when (value) {
             AppOptimizationType.SPEED_PROFILE.value -> AppOptimizationType.SPEED_PROFILE
@@ -171,9 +106,6 @@ class OptimizationWorker @AssistedInject constructor(
 
     companion object {
         const val KEY_OPTIMIZATION_MODE = "optimization_mode"
-
-        private const val NOTIFICATION_CHANNEL_ID = "optimization"
-        private const val NOTIFICATION_ID = 1001
 
         /**
          * Enqueues a unique optimization worker.
