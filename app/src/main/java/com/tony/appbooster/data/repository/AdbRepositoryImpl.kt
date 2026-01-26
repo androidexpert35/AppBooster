@@ -308,9 +308,13 @@ class AdbRepositoryImpl @Inject constructor(
         return runCatching {
             _optimizationAnalysis.value = _optimizationAnalysis.value.copy(isScanning = true)
 
+            // Add log entry for analysis start
+            addLogEntry(LogEntryType.ANALYZING, "Analyzing apps...", detail = "Checking optimization status")
+
             val allPackages = queryInstalledPackages()
 
             if (allPackages.isEmpty()) {
+                addLogEntry(LogEntryType.INFO, "No packages found")
                 val result = OptimizationAnalysis(
                     totalAppsScanned = 0,
                     appsNeedingOptimization = 0,
@@ -321,6 +325,8 @@ class AdbRepositoryImpl @Inject constructor(
                 _optimizationAnalysis.value = result
                 return@runCatching result
             }
+
+            addLogEntry(LogEntryType.ANALYZING, "Scanning ${allPackages.size} apps...")
 
             val compileMode = mode.value
             var needsOptimization = 0
@@ -343,6 +349,14 @@ class AdbRepositoryImpl @Inject constructor(
                 lastScanTimeMs = System.currentTimeMillis()
             )
             _optimizationAnalysis.value = result
+
+            // Add completion log entry
+            addLogEntry(
+                LogEntryType.COMPLETE,
+                "Analysis complete",
+                detail = "$needsOptimization need optimization, $alreadyOptimized already optimized"
+            )
+
             result
         }.fold(
             onSuccess = { analysis ->
@@ -350,6 +364,7 @@ class AdbRepositoryImpl @Inject constructor(
             },
             onFailure = { throwable ->
                 _optimizationAnalysis.value = _optimizationAnalysis.value.copy(isScanning = false)
+                addLogEntry(LogEntryType.ERROR, "Analysis failed", detail = throwable.message)
                 Resource.Error(
                     ResourceError.LogicError(
                         errorMessage = "Analysis failed: ${throwable.message}",

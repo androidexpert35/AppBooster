@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RocketLaunch
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -420,6 +421,11 @@ private fun ActivityLogItem(
                 Icons.Rounded.Cancel,
                 Color(0xFFFF5722),
                 Color(0xFFFF5722).copy(alpha = 0.1f)
+            )
+            LogEntryType.ANALYZING -> Triple(
+                Icons.Rounded.Search,
+                Color(0xFF00BCD4),
+                Color(0xFF00BCD4).copy(alpha = 0.1f)
             )
             else -> Triple(
                 Icons.Rounded.Info,

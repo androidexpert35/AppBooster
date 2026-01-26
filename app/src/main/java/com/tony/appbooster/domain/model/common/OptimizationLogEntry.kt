@@ -41,5 +41,7 @@ enum class LogEntryType {
     /** Process cancelled */
     CANCELLED,
     /** Command being executed */
-    COMMAND
+    COMMAND,
+    /** Analyzing apps */
+    ANALYZING
 }
