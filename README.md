@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.webp" width="120" alt="OptiDroid Logo"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/app_icon.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/images/app_icon.svg">
+    <img src="docs/images/app_icon.svg" width="160" alt="OptiDroid — Rocket App Icon"/>
+  </picture>
 </p>
 
 <h1 align="center">OptiDroid</h1>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 108 108">
+  <!-- Background -->
+  <rect width="108" height="108" rx="24" fill="#ECEFF1"/>
+  <g transform="translate(18,18) scale(3)">
+    <!-- Rocket tip -->
+    <path d="M12,2.5L14.5,7H9.5L12,2.5Z" fill="#1976D2"/>
+    <!-- Main Rocket Body -->
+    <path d="M14.5,7C14.5,7 16,15 16,17C16,18.5 15,19 14,19H10C9,19 8,18.5 8,17C8,15 9.5,7 9.5,7H14.5Z" fill="#2196F3"/>
+    <!-- Window -->
+    <path d="M12,10C12.83,10 13.5,10.67 13.5,11.5C13.5,12.33 12.83,13 12,13C11.17,13 10.5,12.33 10.5,11.5C10.5,10.67 11.17,10 12,10Z" fill="#FFFFFF"/>
+    <!-- Wings -->
+    <path d="M8,15L5,19H8V15ZM16,15V19H19L16,15Z" fill="#1565C0"/>
+    <!-- Flame Core -->
+    <path d="M10,19L12,23L14,19H10Z" fill="#FFC107"/>
+    <!-- Flame Outer -->
+    <path d="M11,19L12,21.5L13,19H11Z" fill="#FF5722"/>
+  </g>
+</svg>
+
