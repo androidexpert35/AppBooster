@@ -18,7 +18,6 @@ class ResourceTest {
     @Test
     fun `given success data when wrapped in Resource Success then data is accessible`() {
         val resource: Resource<String> = Resource.Success("hello")
-        assertTrue(resource is Resource.Success)
         assertEquals("hello", (resource as Resource.Success).data)
     }
 
@@ -33,7 +32,6 @@ class ResourceTest {
     fun `given LogicError when wrapped in Resource Error then error data accessible`() {
         val error = ResourceError.LogicError("bad logic", errorCode = "E001")
         val resource: Resource<Nothing> = Resource.Error(error)
-        assertTrue(resource is Resource.Error)
         assertEquals(error, (resource as Resource.Error).data)
     }
 
@@ -41,20 +39,20 @@ class ResourceTest {
     fun `given NetworkError when wrapped in Resource Error then error data accessible`() {
         val error = ResourceError.NetworkError("timeout")
         val resource = Resource.Error(error)
-        assertEquals(error, (resource as Resource.Error).data)
+        assertEquals(error, resource.data)
     }
 
     @Test
     fun `given DatabaseError when wrapped in Resource Error then message preserved`() {
         val error = ResourceError.DatabaseError("disk full")
         val resource = Resource.Error(error)
-        assertEquals("disk full", ((resource as Resource.Error).data as ResourceError.DatabaseError).message)
+        assertEquals("disk full", (resource.data as ResourceError.DatabaseError).message)
     }
 
     @Test
     fun `given UnknownError when wrapped in Resource Error then is UnknownError`() {
         val resource = Resource.Error(ResourceError.UnknownError)
-        assertTrue((resource as Resource.Error).data is ResourceError.UnknownError)
+        assertTrue(resource.data is ResourceError.UnknownError)
     }
 
     // ── ResourceError equality ────────────────────────────────────────────────
