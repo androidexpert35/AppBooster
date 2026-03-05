@@ -4,14 +4,12 @@ package com.tony.appbooster.presentation.navigation
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navigation
 import com.tony.appbooster.presentation.screen.main.MainAppScreen
 import com.tony.appbooster.presentation.screen.shizuku.ShizukuSetupScreen
@@ -20,8 +18,6 @@ import com.tony.appbooster.presentation.screen.shizuku.ShizukuSetupScreen
 fun AppBoosterNavigationGraph(
     navController: NavHostController
 ) {
-    val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = backStackEntry?.destination?.route
 
     Column(modifier = Modifier.fillMaxSize()) {
         NavHost(

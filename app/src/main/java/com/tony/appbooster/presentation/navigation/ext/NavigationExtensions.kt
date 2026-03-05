@@ -2,7 +2,7 @@ package com.example.schedapp.presentation.navigation.ext
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
@@ -25,6 +25,7 @@ import androidx.navigation.compose.composable
  * @param content A composable lambda that defines the UI for the destination. It receives the
  * ViewModel and the NavBackStackEntry as parameters.
  */
+@Suppress("unused")
 inline fun <reified T : ViewModel> NavGraphBuilder.scopedViewModelComposable(
     navController: NavHostController?,
     parentRoute: String,

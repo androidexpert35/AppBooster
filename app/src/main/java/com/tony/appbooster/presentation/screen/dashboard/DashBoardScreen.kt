@@ -102,7 +102,7 @@ private fun DashboardContent(
                     // Intentionally empty: connection chip removed (Shizuku health is validated on-demand).
                 },
                 scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.largeTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
                 )

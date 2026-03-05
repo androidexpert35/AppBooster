@@ -82,6 +82,7 @@ import java.util.Locale
  * @param currentApp Package name of current app being processed.
  * @param modifier Modifier for layout customization.
  */
+@Suppress("unused")
 @Composable
 fun CircularOptimizationProgress(
     progress: Float,
@@ -168,6 +169,7 @@ fun CircularOptimizationProgress(
 /**
  * Stats summary bar showing optimization statistics.
  */
+@Suppress("unused")
 @Composable
 fun OptimizationStatsBar(
     optimizedCount: Int,
@@ -183,14 +185,12 @@ fun OptimizationStatsBar(
     ) {
         StatChip(
             count = optimizedCount,
-            label = "Optimized",
             color = MaterialTheme.colorScheme.primary,
             icon = Icons.Rounded.CheckCircle,
             modifier = Modifier.weight(1f)
         )
         StatChip(
             count = skippedCount,
-            label = "Skipped",
             color = MaterialTheme.colorScheme.tertiary,
             icon = Icons.Rounded.FastForward,
             modifier = Modifier.weight(1f)
@@ -198,7 +198,6 @@ fun OptimizationStatsBar(
         if (failedCount > 0) {
             StatChip(
                 count = failedCount,
-                label = "Failed",
                 color = MaterialTheme.colorScheme.error,
                 icon = Icons.Rounded.Error,
                 modifier = Modifier.weight(1f)
@@ -213,7 +212,6 @@ fun OptimizationStatsBar(
 @Composable
 private fun StatChip(
     count: Int,
-    label: String,
     color: Color,
     icon: ImageVector,
     modifier: Modifier = Modifier
@@ -261,8 +259,8 @@ private fun StatChip(
 @Composable
 fun OptimizationActivityFeed(
     entries: List<OptimizationLogEntry>,
+    modifier: Modifier = Modifier,
     isExpanded: Boolean = false,
-    modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
 
@@ -386,7 +384,7 @@ private fun ActivityLogItem(
                 val applicationInfo = pm.getApplicationInfo(pkg, 0)
                 val drawable = applicationInfo.loadIcon(pm)
                 appIcon = drawable.toBitmap(width = 64, height = 64)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 appIcon = null
             }
         }
@@ -476,7 +474,7 @@ private fun ActivityLogItem(
             } else if (isAppEntry) {
                 // Show package initial as fallback
                 Text(
-                    text = entry.packageName?.substringAfterLast(".")?.take(1)?.uppercase() ?: "?",
+                    text = entry.packageName.substringAfterLast(".").take(1).uppercase(),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = color
@@ -540,6 +538,7 @@ private fun ActivityLogItem(
  * @param packageName The package name of the app being optimized.
  * @param modifier Modifier for layout customization.
  */
+@Suppress("unused")
 @Composable
 fun CurrentAppCard(
     packageName: String,
@@ -579,7 +578,7 @@ private fun CurrentAppCardContent(
                 val drawable = applicationInfo.loadIcon(pm)
                 appIcon = drawable.toBitmap(width = 96, height = 96)
                 appLabel = pm.getApplicationLabel(applicationInfo).toString()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 appIcon = null
                 appLabel = null
             }

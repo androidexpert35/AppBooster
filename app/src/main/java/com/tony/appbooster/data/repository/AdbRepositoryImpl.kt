@@ -30,7 +30,7 @@ import javax.inject.Inject
  * @param shellDataSource Data source that executes shell commands via Shizuku.
  */
 class AdbRepositoryImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val shellDataSource: AdbShellDataSource
 ) : AdbRepository {
 

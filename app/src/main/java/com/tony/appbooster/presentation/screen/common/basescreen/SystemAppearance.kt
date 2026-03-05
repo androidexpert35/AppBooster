@@ -18,11 +18,9 @@ fun SystemAppearance(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
+            @Suppress("DEPRECATION")
             window.statusBarColor = statusBarColor.toArgb()
 
-            // isAppearanceLightStatusBars = true -> icone scure (per sfondo chiaro)
-            // isAppearanceLightStatusBars = false -> icone chiare (per sfondo scuro)
-            // La logica è: se lo sfondo è chiaro (luminanza > 0.5), isAppearanceLightStatusBars deve essere true.
             val isLightAppearance =
                 useLightStatusIcons?.not() ?: (statusBarColor.luminance() > 0.5f)
 

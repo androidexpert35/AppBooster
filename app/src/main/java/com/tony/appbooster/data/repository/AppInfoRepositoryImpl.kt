@@ -29,7 +29,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class AppInfoRepositoryImpl @Inject constructor(
-    @ApplicationContext private val applicationContext: Context
+    @param:ApplicationContext private val applicationContext: Context
 ) : AppInfoRepository {
 
     /**
