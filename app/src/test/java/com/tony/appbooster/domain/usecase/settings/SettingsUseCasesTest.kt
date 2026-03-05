@@ -10,6 +10,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -39,12 +40,11 @@ class SettingsUseCasesTest {
             flowOf(Resource.Success(AppOptimizationType.SPEED_PROFILE))
 
         val useCase = ObserveAppOptimizationTypeUseCase(repository)
-        val flow = useCase()
+        val emissions = useCase().toList()
 
-        flow.collect { resource ->
-            assertTrue(resource is Resource.Success)
-            assertEquals(AppOptimizationType.SPEED_PROFILE, (resource as Resource.Success).data)
-        }
+        assertEquals(1, emissions.size)
+        assertTrue(emissions[0] is Resource.Success)
+        assertEquals(AppOptimizationType.SPEED_PROFILE, (emissions[0] as Resource.Success).data)
         verify(exactly = 1) { repository.observeAppOptimizationType() }
     }
 
@@ -54,12 +54,11 @@ class SettingsUseCasesTest {
         every { repository.observeAppOptimizationType() } returns flowOf(Resource.Error(error))
 
         val useCase = ObserveAppOptimizationTypeUseCase(repository)
-        val flow = useCase()
+        val emissions = useCase().toList()
 
-        flow.collect { resource ->
-            assertTrue(resource is Resource.Error)
-            assertEquals(error, (resource as Resource.Error).data)
-        }
+        assertEquals(1, emissions.size)
+        assertTrue(emissions[0] is Resource.Error)
+        assertEquals(error, (emissions[0] as Resource.Error).data)
     }
 
     // ── SetAppOptimizationTypeUseCase ─────────────────────────────────────────

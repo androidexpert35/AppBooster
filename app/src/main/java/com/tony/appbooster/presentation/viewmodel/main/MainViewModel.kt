@@ -6,6 +6,7 @@ import com.alkemy.boxapp.presentation.navigation.interfaces.NavigationManager
 import com.tony.appbooster.R
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.model.common.ResourceError
+import com.tony.appbooster.domain.model.settings.AppOptimizationType
 import com.tony.appbooster.domain.usecase.adb.ConnectAdbUseCase
 import com.tony.appbooster.domain.usecase.adb.ObserveAdbConnectionStateUseCase
 import com.tony.appbooster.domain.usecase.analysis.ObserveOptimizationAnalysisUseCase
@@ -140,13 +141,19 @@ class MainViewModel @Inject constructor(
                 val (connectionState, logs, logEntries) = first
                 val (progress, analysis, dismissedRunIds) = second
 
+                // Preserve the current optimizationMode so it isn't reset to the default
+                // whenever any of the repository flows emit a new value.
+                val currentMode = uiState.value.data?.optimizationMode
+                    ?: AppOptimizationType.SPEED_PROFILE
+
                 MainUiModel(
                     connectionState = connectionState,
                     logs = logs,
                     logEntries = logEntries,
                     optimizationProgress = progress,
                     optimizationAnalysis = analysis,
-                    dismissedResultRunIds = dismissedRunIds
+                    dismissedResultRunIds = dismissedRunIds,
+                    optimizationMode = currentMode
                 )
             }.collect { model ->
                 updateUiData(model)
