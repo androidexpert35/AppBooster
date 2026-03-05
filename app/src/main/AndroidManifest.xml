@@ -30,8 +30,7 @@
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync"
-            tools:node="merge"
-            tools:replace="android:foregroundServiceType" />
+            tools:node="merge" />
 
         <!-- Disable default WorkManager initialization; we use HiltWorkerFactory -->
         <provider
