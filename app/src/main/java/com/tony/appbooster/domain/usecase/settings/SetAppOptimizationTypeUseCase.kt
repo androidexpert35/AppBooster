@@ -2,7 +2,6 @@ package com.tony.appbooster.domain.usecase.settings
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.model.settings.AppOptimizationType
 import com.tony.appbooster.domain.repository.SettingsRepository
-import javax.inject.Inject
 
 /**
  * Use case responsible for persisting the selected optimization behavior,
@@ -10,7 +9,7 @@ import javax.inject.Inject
  *
  * @param repository The [SettingsRepository] used to persist configuration changes.
  */
-class SetAppOptimizationTypeUseCase @Inject constructor(
+class SetAppOptimizationTypeUseCase(
     private val repository: SettingsRepository
 ) {
 

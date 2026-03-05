@@ -2,7 +2,6 @@ package com.tony.appbooster.domain.usecase.appinfo
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.repository.AppInfoRepository
 import com.tony.appbooster.presentation.screen.settings.model.AppInfo
-import javax.inject.Inject
 
 /**
  * Use case responsible for retrieving app metadata required by the Settings
@@ -11,7 +10,7 @@ import javax.inject.Inject
  * @param appInfoRepository Repository providing app version and channel data.
  * @return [Resource]\<[AppInfo]\> that can be mapped directly to UI state.
  */
-class GetAppInfoUseCase @Inject constructor(
+class GetAppInfoUseCase(
     private val appInfoRepository: AppInfoRepository
 ) {
 

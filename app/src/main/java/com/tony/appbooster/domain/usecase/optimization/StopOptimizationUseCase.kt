@@ -1,6 +1,5 @@
 package com.tony.appbooster.domain.usecase.optimization
 import com.tony.appbooster.domain.model.common.Resource
-import javax.inject.Inject
 
 /**
  * Stops an active optimization run.
@@ -17,7 +16,7 @@ import javax.inject.Inject
  * @property cancelOptimizationWorkUseCase Cancels WorkManager-backed optimization work.
  * @property cancelOptimizationUseCase Cancels repository-side optimization loop.
  */
-class StopOptimizationUseCase @Inject constructor(
+class StopOptimizationUseCase(
     private val cancelOptimizationWorkUseCase: CancelOptimizationWorkUseCase,
     private val cancelOptimizationUseCase: CancelOptimizationUseCase
 ) {

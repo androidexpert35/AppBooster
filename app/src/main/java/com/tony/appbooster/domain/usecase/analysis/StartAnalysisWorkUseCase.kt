@@ -2,7 +2,6 @@ package com.tony.appbooster.domain.usecase.analysis
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.model.settings.AppOptimizationType
 import com.tony.appbooster.domain.scheduler.AnalysisWorkScheduler
-import javax.inject.Inject
 
 /**
  * Enqueues the foreground analysis WorkManager job.
@@ -13,7 +12,7 @@ import javax.inject.Inject
  *
  * @property scheduler Scheduler responsible for enqueuing and canceling analysis work.
  */
-class StartAnalysisWorkUseCase @Inject constructor(
+class StartAnalysisWorkUseCase(
     private val scheduler: AnalysisWorkScheduler
 ) {
 

@@ -2,7 +2,6 @@ package com.tony.appbooster.domain.usecase.optimization
 import com.tony.appbooster.domain.model.common.OptimizationProgress
 import com.tony.appbooster.domain.repository.AdbRepository
 import kotlinx.coroutines.flow.StateFlow
-import javax.inject.Inject
 
 /**
  * Exposes the current optimization progress as a stream.
@@ -13,7 +12,7 @@ import javax.inject.Inject
  *
  * @property repository Repository providing optimization progress updates.
  */
-class ObserveOptimizationProgressUseCase @Inject constructor(
+class ObserveOptimizationProgressUseCase(
     private val repository: AdbRepository
 ) {
 

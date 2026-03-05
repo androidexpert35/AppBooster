@@ -1,7 +1,6 @@
 package com.tony.appbooster.domain.usecase.optimization
 import com.tony.appbooster.domain.repository.AdbRepository
 import kotlinx.coroutines.flow.StateFlow
-import javax.inject.Inject
 
 /**
  * Exposes the raw command output log as a stream.
@@ -12,7 +11,7 @@ import javax.inject.Inject
  *
  * @property repository Repository providing command output stream.
  */
-class ObserveCommandOutputUseCase @Inject constructor(
+class ObserveCommandOutputUseCase(
     private val repository: AdbRepository
 ) {
 

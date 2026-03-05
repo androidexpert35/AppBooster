@@ -1,7 +1,6 @@
 package com.tony.appbooster.domain.usecase.adb
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.repository.AdbRepository
-import javax.inject.Inject
 
 /**
  * Ensures that the app has an active shell connection (Shizuku / ADB bridge).
@@ -12,7 +11,7 @@ import javax.inject.Inject
  *
  * @property repository Repository responsible for establishing and validating connectivity.
  */
-class EnsureAdbConnectedUseCase @Inject constructor(
+class EnsureAdbConnectedUseCase(
     private val repository: AdbRepository
 ) {
 

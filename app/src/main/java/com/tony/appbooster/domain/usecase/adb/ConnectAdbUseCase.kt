@@ -1,7 +1,6 @@
 package com.tony.appbooster.domain.usecase.adb
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.repository.AdbRepository
-import javax.inject.Inject
 
 /**
  * Ensures the Shizuku-based shell connection is ready for use.
@@ -11,7 +10,7 @@ import javax.inject.Inject
  *
  * @param repository Repository providing ADB/shell connection operations.
  */
-class ConnectAdbUseCase @Inject constructor(
+class ConnectAdbUseCase(
     private val repository: AdbRepository
 ) {
 

@@ -2,7 +2,6 @@ package com.tony.appbooster.domain.usecase.optimization
 import com.tony.appbooster.domain.model.common.OptimizationLogEntry
 import com.tony.appbooster.domain.repository.AdbRepository
 import kotlinx.coroutines.flow.StateFlow
-import javax.inject.Inject
 
 /**
  * Exposes the structured activity log entries as a stream.
@@ -13,7 +12,7 @@ import javax.inject.Inject
  *
  * @property repository Repository providing log entry stream.
  */
-class ObserveOptimizationLogEntriesUseCase @Inject constructor(
+class ObserveOptimizationLogEntriesUseCase(
     private val repository: AdbRepository
 ) {
 

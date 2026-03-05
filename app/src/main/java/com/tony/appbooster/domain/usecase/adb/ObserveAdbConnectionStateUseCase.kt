@@ -2,7 +2,6 @@ package com.tony.appbooster.domain.usecase.adb
 import com.tony.appbooster.domain.repository.AdbConnectionState
 import com.tony.appbooster.domain.repository.AdbRepository
 import kotlinx.coroutines.flow.StateFlow
-import javax.inject.Inject
 
 /**
  * Exposes the current ADB connection state as a stream.
@@ -13,7 +12,7 @@ import javax.inject.Inject
  *
  * @property repository Repository providing ADB connection signals.
  */
-class ObserveAdbConnectionStateUseCase @Inject constructor(
+class ObserveAdbConnectionStateUseCase(
     private val repository: AdbRepository
 ) {
     /**

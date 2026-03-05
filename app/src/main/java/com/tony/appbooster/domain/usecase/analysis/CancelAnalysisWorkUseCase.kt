@@ -1,7 +1,6 @@
 package com.tony.appbooster.domain.usecase.analysis
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.scheduler.AnalysisWorkScheduler
-import javax.inject.Inject
 
 /**
  * Cancels any running analysis work.
@@ -12,7 +11,7 @@ import javax.inject.Inject
  *
  * @property scheduler Scheduler responsible for canceling analysis work.
  */
-class CancelAnalysisWorkUseCase @Inject constructor(
+class CancelAnalysisWorkUseCase(
     private val scheduler: AnalysisWorkScheduler
 ) {
 

@@ -1,7 +1,6 @@
 package com.tony.appbooster.domain.usecase.optimization
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.repository.AdbRepository
-import javax.inject.Inject
 
 /**
  * Clears the latest optimization result snapshot.
@@ -13,7 +12,7 @@ import javax.inject.Inject
  * @property repository Repository that owns the optimization progress/result state.
  * @constructor Creates the use case with required repository dependency.
  */
-class DismissOptimizationResultUseCase @Inject constructor(
+class DismissOptimizationResultUseCase(
     private val repository: AdbRepository
 ) {
 

@@ -1,14 +1,13 @@
 package com.tony.appbooster.domain.usecase.shizuku
 
 import com.tony.appbooster.domain.client.ShizukuShellClient
-import javax.inject.Inject
 
 /**
  * Requests Shizuku runtime permission from the user.
  *
  * @property shizukuClient Client capable of triggering permission requests.
  */
-class RequestShizukuPermissionUseCase @Inject constructor(
+class RequestShizukuPermissionUseCase(
     private val shizukuClient: ShizukuShellClient
 ) {
     /**

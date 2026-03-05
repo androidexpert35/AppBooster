@@ -3,7 +3,6 @@ import com.tony.appbooster.domain.model.common.OptimizationAnalysis
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.model.settings.AppOptimizationType
 import com.tony.appbooster.domain.repository.AdbRepository
-import javax.inject.Inject
 
 /**
  * Executes the pre-optimization analysis scan on the connected device.
@@ -14,7 +13,7 @@ import javax.inject.Inject
  *
  * @property repository Repository performing analysis via shell commands.
  */
-class RunAnalysisUseCase @Inject constructor(
+class RunAnalysisUseCase(
     private val repository: AdbRepository
 ) {
 

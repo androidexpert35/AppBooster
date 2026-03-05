@@ -3,7 +3,6 @@ import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.model.settings.AppOptimizationType
 import com.tony.appbooster.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
-import javax.inject.Inject
 
 /**
  * Use case responsible for observing the current optimization behavior
@@ -11,7 +10,7 @@ import javax.inject.Inject
  *
  * @param repository The [SettingsRepository] providing access to persisted configuration.
  */
-class ObserveAppOptimizationTypeUseCase @Inject constructor(
+class ObserveAppOptimizationTypeUseCase(
     private val repository: SettingsRepository
 ) {
 

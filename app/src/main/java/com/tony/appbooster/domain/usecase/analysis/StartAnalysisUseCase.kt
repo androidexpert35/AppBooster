@@ -3,7 +3,6 @@ package com.tony.appbooster.domain.usecase.analysis
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.model.settings.AppOptimizationType
 import com.tony.appbooster.domain.usecase.adb.ConnectAdbUseCase
-import javax.inject.Inject
 
 /**
  * Starts an analysis run by ensuring connectivity and enqueuing foreground work.
@@ -16,7 +15,7 @@ import javax.inject.Inject
  * @property connectAdbUseCase Use case that establishes ADB/Shizuku connectivity.
  * @property startAnalysisWorkUseCase Use case that schedules analysis work.
  */
-class StartAnalysisUseCase @Inject constructor(
+class StartAnalysisUseCase(
     private val connectAdbUseCase: ConnectAdbUseCase,
     private val startAnalysisWorkUseCase: StartAnalysisWorkUseCase
 ) {

@@ -2,7 +2,6 @@ package com.tony.appbooster.domain.usecase.optimization
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.model.settings.AppOptimizationType
 import com.tony.appbooster.domain.repository.AdbRepository
-import javax.inject.Inject
 
 /**
  * Triggers ART optimization for all installed applications using the
@@ -11,7 +10,7 @@ import javax.inject.Inject
  * @param repository Repository used to send optimization commands over ADB.
  * @return [Resource.Success] when optimization completes, [Resource.Error] otherwise.
  */
-class OptimizeAppUseCase @Inject constructor(
+class OptimizeAppUseCase(
     private val repository: AdbRepository
 ) {
 

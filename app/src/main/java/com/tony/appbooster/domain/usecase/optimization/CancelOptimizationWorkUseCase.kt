@@ -1,7 +1,6 @@
 package com.tony.appbooster.domain.usecase.optimization
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.scheduler.OptimizationWorkScheduler
-import javax.inject.Inject
 
 /**
  * Cancels any running optimization work.
@@ -12,7 +11,7 @@ import javax.inject.Inject
  *
  * @property scheduler Scheduler responsible for canceling optimization work.
  */
-class CancelOptimizationWorkUseCase @Inject constructor(
+class CancelOptimizationWorkUseCase(
     private val scheduler: OptimizationWorkScheduler
 ) {
 

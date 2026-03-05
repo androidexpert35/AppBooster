@@ -1,6 +1,5 @@
 package com.tony.appbooster.domain.usecase.analysis
 import com.tony.appbooster.domain.model.common.Resource
-import javax.inject.Inject
 
 /**
  * Stops an active analysis run.
@@ -16,7 +15,7 @@ import javax.inject.Inject
  * @property cancelAnalysisWorkUseCase Cancels WorkManager-backed analysis work.
  * @property cancelAnalysisUseCase Cancels repository-side analysis loop.
  */
-class StopAnalysisUseCase @Inject constructor(
+class StopAnalysisUseCase(
     private val cancelAnalysisWorkUseCase: CancelAnalysisWorkUseCase,
     private val cancelAnalysisUseCase: CancelAnalysisUseCase
 ) {

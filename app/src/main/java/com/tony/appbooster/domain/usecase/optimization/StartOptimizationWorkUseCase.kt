@@ -2,7 +2,6 @@ package com.tony.appbooster.domain.usecase.optimization
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.model.settings.AppOptimizationType
 import com.tony.appbooster.domain.scheduler.OptimizationWorkScheduler
-import javax.inject.Inject
 
 /**
  * Enqueues the foreground optimization WorkManager job.
@@ -13,7 +12,7 @@ import javax.inject.Inject
  *
  * @property scheduler Scheduler responsible for enqueuing and canceling work.
  */
-class StartOptimizationWorkUseCase @Inject constructor(
+class StartOptimizationWorkUseCase(
     private val scheduler: OptimizationWorkScheduler
 ) {
 
