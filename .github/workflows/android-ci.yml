@@ -96,8 +96,12 @@ jobs:
       - name: Read version from build config
         id: version
         run: |
-          version_name=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
-          version_code=$(grep -oP 'versionCode\s*=\s*\K\d+' app/build.gradle.kts)
+          # Extract major, minor, patch variables from build.gradle.kts
+          major=$(grep -oP 'val major\s*=\s*\K\d+' app/build.gradle.kts)
+          minor=$(grep -oP 'val minor\s*=\s*\K\d+' app/build.gradle.kts)
+          patch=$(grep -oP 'val patch\s*=\s*\K\d+' app/build.gradle.kts)
+          version_name="${major}.${minor}.${patch}"
+          version_code=$(( major * 10000 + minor * 100 + patch ))
           echo "version_name=${version_name}" >> "$GITHUB_OUTPUT"
           echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
           echo "### Version info" >> "$GITHUB_STEP_SUMMARY"
