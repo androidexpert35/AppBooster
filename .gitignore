@@ -8,12 +8,20 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 /.idea/deploymentTargetSelector.xml
+/.idea/copilot.data.migration.*.xml
 .DS_Store
 /build
 /captures
 .externalNativeBuild
 .cxx
 local.properties
+
+# Kotlin build error logs (local IDE artefacts)
+.kotlin/
+
+# Root-level build output / scratch files
+*.txt
+*.log
 
 # Local signing material
 *.jks
