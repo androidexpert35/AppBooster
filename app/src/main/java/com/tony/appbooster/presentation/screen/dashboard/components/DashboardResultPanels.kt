@@ -1,6 +1,8 @@
 package com.tony.appbooster.presentation.screen.dashboard.components
 
+import android.content.res.Configuration
 import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -34,332 +36,335 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.tony.appbooster.R
+import com.tony.appbooster.presentation.ui.theme.AppBoosterTheme
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Unified result panel
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Expressive completion panel displayed after a successful optimization run.
+ * Generalized hero result panel that renders the post-run outcome of an
+ * optimization session.
  *
- * @param processedCount Number of optimized apps.
- * @param skippedCount Number of apps skipped (already optimized recently).
- * @param totalCount Total apps targeted by the run.
- * @param onDismiss Callback to hide this panel until the next run.
- * @param onRunAgain Callback to start optimization again.
+ * Replaces the three previous per-outcome composables with a single implementation
+ * driven by [HeroCardStatus].
+ *
+ * @param status Sealed outcome that describes which result variant to render.
+ * @param modifier Optional layout modifier.
+ * @param onDismiss Callback invoked when the user dismisses the result panel.
+ * @param onRunAgain Callback invoked when the user requests another optimization
+ *   run. Unused for [HeroCardStatus.AllOptimized].
  */
 @Composable
-fun OptimizationCompletedContent(
-    processedCount: Int,
-    skippedCount: Int,
-    totalCount: Int,
+fun HeroResultPanel(
+    status: HeroCardStatus,
+    modifier: Modifier = Modifier,
     onDismiss: () -> Unit,
-    onRunAgain: () -> Unit
+    onRunAgain: () -> Unit = {},
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "completed")
+    // Derive visual tokens from the status variant
+    val config = rememberHeroResultConfig(status)
+
+    val infiniteTransition = rememberInfiniteTransition(label = "heroResultPanel")
     val iconScale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = 1.06f,
+        targetValue = config.iconScaleTarget,
         animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = EaseInOutCubic),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+            animation = tween(config.pulseMs, easing = EaseInOutCubic),
+            repeatMode = RepeatMode.Reverse
         ),
         label = "iconScale"
     )
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Surface(
-            modifier = Modifier
-                .size(72.dp)
-                .scale(iconScale),
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            tonalElevation = 4.dp
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Rounded.CheckCircle,
-                    contentDescription = null,
-                    modifier = Modifier.size(38.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Text(
-            text = stringResource(R.string.dashboard_result_completed_title),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            text = stringResource(
-                R.string.dashboard_result_completed_count,
-                processedCount,
-                totalCount
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.height(0.dp) // keep layout stable when animating
-        )
-
-        if (skippedCount > 0) {
-            Spacer(Modifier.height(16.dp))
-            OptimizationStatsRow(
-                needsOptimizationCount = 0,
-                optimizedCount = processedCount + skippedCount
-            )
-        }
-
-        Spacer(Modifier.height(18.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            FilledTonalButton(
-                onClick = onRunAgain,
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.action_run_again))
-            }
-
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.align(Alignment.CenterVertically)
-            ) {
-                Text(stringResource(R.string.action_dismiss))
-            }
-        }
-    }
-}
-
-/**
- * Expressive result panel displayed when an optimization run is cancelled.
- *
- * @param processedCount Number of apps optimized before cancellation.
- * @param skippedCount Number of apps skipped (already optimized recently).
- * @param totalCount Total apps targeted by the run.
- * @param onDismiss Callback to hide this panel until the next run.
- * @param onRunAgain Callback to start optimization again.
- */
-@Composable
-fun OptimizationCanceledContent(
-    processedCount: Int,
-    skippedCount: Int,
-    totalCount: Int,
-    onDismiss: () -> Unit,
-    onRunAgain: () -> Unit
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "canceled")
-    val iconScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.04f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = EaseInOutCubic),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-        ),
-        label = "iconScale"
-    )
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Surface(
-            modifier = Modifier
-                .size(72.dp)
-                .scale(iconScale),
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.errorContainer,
-            tonalElevation = 4.dp
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Rounded.DoNotDisturbOn,
-                    contentDescription = null,
-                    modifier = Modifier.size(38.dp),
-                    tint = MaterialTheme.colorScheme.onErrorContainer
-                )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Text(
-            text = stringResource(R.string.dashboard_result_canceled_title),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            text = stringResource(
-                R.string.dashboard_result_canceled_count,
-                processedCount,
-                totalCount
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        if (skippedCount > 0 || processedCount > 0) {
-            Spacer(Modifier.height(16.dp))
-            OptimizationStatsRow(
-                needsOptimizationCount = (totalCount - (processedCount + skippedCount)).coerceAtLeast(0),
-                optimizedCount = processedCount + skippedCount
-            )
-        }
-
-        Spacer(Modifier.height(18.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            FilledTonalButton(
-                onClick = onRunAgain,
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.action_run_again))
-            }
-
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.align(Alignment.CenterVertically)
-            ) {
-                Text(stringResource(R.string.action_dismiss))
-            }
-        }
-    }
-}
-
-/**
- * Celebratory content displayed when all apps are already optimized.
- *
- * @param skippedCount Number of apps that are already optimized.
- * @param onDismiss Callback to hide this panel.
- */
-@Composable
-fun AllOptimizedContent(
-    skippedCount: Int,
-    onDismiss: () -> Unit
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "allOptimized")
-    val iconScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = EaseInOutCubic),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-        ),
-        label = "iconScale"
-    )
+    // Extra glow pulse used only for AllOptimized
     val glowAlpha by infiniteTransition.animateFloat(
         initialValue = 0.3f,
         targetValue = 0.7f,
         animationSpec = infiniteRepeatable(
             animation = tween(1500, easing = EaseInOutCubic),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+            repeatMode = RepeatMode.Reverse
         ),
         label = "glowAlpha"
     )
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // ── Icon badge ─────────────────────────────────────────────────────
         Box(contentAlignment = Alignment.Center) {
-            Surface(
-                modifier = Modifier
-                    .size(88.dp)
-                    .scale(iconScale)
-                    .alpha(glowAlpha),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-            ) {}
+            // Glow halo – only visible for AllOptimized
+            if (config.showGlow) {
+                Surface(
+                    modifier = Modifier
+                        .size(88.dp)
+                        .scale(iconScale)
+                        .alpha(glowAlpha),
+                    shape = CircleShape,
+                    color = config.glowColor
+                ) {}
+            }
 
             Surface(
                 modifier = Modifier
-                    .size(72.dp)
+                    .size(if (config.showGlow) 72.dp else 72.dp)
                     .scale(iconScale),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                tonalElevation = 6.dp
+                color = config.containerColor,
+                tonalElevation = if (config.showGlow) 6.dp else 4.dp
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = Icons.Rounded.CheckCircle,
+                        imageVector = config.icon,
                         contentDescription = null,
-                        modifier = Modifier.size(42.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        modifier = Modifier.size(if (config.showGlow) 42.dp else 38.dp),
+                        tint = config.iconTint
                     )
                 }
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(if (config.showGlow) 20.dp else 16.dp))
 
+        // ── Title ──────────────────────────────────────────────────────────
         Text(
-            text = stringResource(R.string.analysis_all_optimized_title),
-            style = MaterialTheme.typography.headlineSmall,
+            text = config.title,
+            style = if (config.showGlow) MaterialTheme.typography.headlineSmall
+                    else MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
 
+        // ── Subtitle / count ───────────────────────────────────────────────
         Text(
-            text = stringResource(R.string.analysis_all_optimized_subtitle),
+            text = config.subtitle,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+            modifier = Modifier.padding(top = 4.dp, bottom = if (config.showGlow) 16.dp else 0.dp)
         )
 
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.tertiaryContainer
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // ── Tertiary chip – AllOptimized only ──────────────────────────────
+        if (config.showGlow) {
+            val allOptimized = status as HeroCardStatus.AllOptimized
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Speed,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Speed,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.analysis_apps_already_optimized,
+                            allOptimized.optimizedCount
+                        ),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+            }
+        }
+
+        // ── Stats row ──────────────────────────────────────────────────────
+        val showStats = when (status) {
+            is HeroCardStatus.Completed  -> status.skippedCount > 0
+            is HeroCardStatus.Canceled   -> status.skippedCount > 0 || status.processedCount > 0
+            is HeroCardStatus.AllOptimized -> status.noProfileCount > 0
+        }
+
+        if (showStats) {
+            Spacer(Modifier.height(16.dp))
+            when (status) {
+                is HeroCardStatus.Completed -> OptimizationStatsRow(
+                    needsOptimizationCount = 0,
+                    optimizedCount = status.processedCount + status.skippedCount
                 )
-                Text(
-                    text = stringResource(R.string.analysis_apps_already_optimized, skippedCount),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                is HeroCardStatus.Canceled -> OptimizationStatsRow(
+                    needsOptimizationCount = (status.totalCount - (status.processedCount + status.skippedCount))
+                        .coerceAtLeast(0),
+                    optimizedCount = status.processedCount + status.skippedCount
+                )
+                is HeroCardStatus.AllOptimized -> OptimizationStatsRow(
+                    needsOptimizationCount = 0,
+                    optimizedCount = status.optimizedCount,
+                    noProfileCount = status.noProfileCount
                 )
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(18.dp))
 
-        TextButton(onClick = onDismiss) {
-            Text(stringResource(R.string.action_dismiss))
+        // ── Action buttons ─────────────────────────────────────────────────
+        if (config.showRunAgain) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                FilledTonalButton(
+                    onClick = onRunAgain,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.action_run_again))
+                }
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.CenterVertically)
+                ) {
+                    Text(stringResource(R.string.action_dismiss))
+                }
+            }
+        } else {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_dismiss))
+            }
         }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Internal config helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Immutable visual configuration resolved from a [HeroCardStatus] variant.
+ * Keeps the rendering composable free from branching on status type.
+ *
+ * @property icon Vector icon rendered inside the badge surface.
+ * @property containerColor Background color of the circular icon badge.
+ * @property iconTint Tint applied to [icon].
+ * @property glowColor Color of the decorative outer glow ring (only used when [showGlow] is true).
+ * @property title Primary headline string.
+ * @property subtitle Secondary descriptive string.
+ * @property iconScaleTarget Upper bound of the looping scale pulse.
+ * @property pulseMs Duration of one half of the scale pulse animation in milliseconds.
+ * @property showGlow Whether to render the decorative outer glow ring (AllOptimized only).
+ * @property showRunAgain Whether to show the "Run again" CTA button.
+ */
+private data class HeroResultConfig(
+    val icon: ImageVector,
+    val containerColor: Color,
+    val iconTint: Color,
+    val glowColor: Color,
+    val title: String,
+    val subtitle: String,
+    val iconScaleTarget: Float,
+    val pulseMs: Int,
+    val showGlow: Boolean,
+    val showRunAgain: Boolean
+)
+
+@Composable
+private fun rememberHeroResultConfig(status: HeroCardStatus): HeroResultConfig {
+    val colorScheme = MaterialTheme.colorScheme
+    return when (status) {
+        is HeroCardStatus.Completed -> HeroResultConfig(
+            icon = Icons.Rounded.CheckCircle,
+            containerColor = colorScheme.primaryContainer,
+            iconTint = colorScheme.onPrimaryContainer,
+            glowColor = Color.Transparent,
+            title = stringResource(R.string.dashboard_result_completed_title),
+            subtitle = stringResource(
+                R.string.dashboard_result_completed_count,
+                status.processedCount,
+                status.totalCount
+            ),
+            iconScaleTarget = 1.06f,
+            pulseMs = 800,
+            showGlow = false,
+            showRunAgain = true
+        )
+        is HeroCardStatus.Canceled -> HeroResultConfig(
+            icon = Icons.Rounded.DoNotDisturbOn,
+            containerColor = colorScheme.errorContainer,
+            iconTint = colorScheme.onErrorContainer,
+            glowColor = Color.Transparent,
+            title = stringResource(R.string.dashboard_result_canceled_title),
+            subtitle = stringResource(
+                R.string.dashboard_result_canceled_count,
+                status.processedCount,
+                status.totalCount
+            ),
+            iconScaleTarget = 1.04f,
+            pulseMs = 900,
+            showGlow = false,
+            showRunAgain = true
+        )
+        is HeroCardStatus.AllOptimized -> HeroResultConfig(
+            icon = Icons.Rounded.CheckCircle,
+            containerColor = colorScheme.primaryContainer,
+            iconTint = colorScheme.primary,
+            glowColor = colorScheme.primary.copy(alpha = 0.2f),
+            title = stringResource(R.string.analysis_all_optimized_title),
+            subtitle = stringResource(R.string.analysis_all_optimized_subtitle),
+            iconScaleTarget = 1.08f,
+            pulseMs = 1000,
+            showGlow = true,
+            showRunAgain = false
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Previews
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Preview(name = "Completed – Light", showBackground = true)
+@Preview(name = "Completed – Dark", uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true)
+@Composable
+private fun HeroResultPanelCompletedPreview() {
+    AppBoosterTheme {
+        HeroResultPanel(
+            status = HeroCardStatus.Completed(processedCount = 18, skippedCount = 4, totalCount = 22),
+            onDismiss = {},
+            onRunAgain = {}
+        )
+    }
+}
+
+@Preview(name = "Canceled – Light", showBackground = true)
+@Preview(name = "Canceled – Dark", uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true)
+@Composable
+private fun HeroResultPanelCanceledPreview() {
+    AppBoosterTheme {
+        HeroResultPanel(
+            status = HeroCardStatus.Canceled(processedCount = 7, skippedCount = 2, totalCount = 22),
+            onDismiss = {},
+            onRunAgain = {}
+        )
+    }
+}
+
+@Preview(name = "All Optimized – Light", showBackground = true)
+@Preview(name = "All Optimized – Dark", uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true)
+@Composable
+private fun HeroResultPanelAllOptimizedPreview() {
+    AppBoosterTheme {
+        HeroResultPanel(
+            status = HeroCardStatus.AllOptimized(optimizedCount = 22, noProfileCount = 3),
+            onDismiss = {}
+        )
     }
 }

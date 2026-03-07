@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.PersonOff
 import androidx.compose.material.icons.rounded.RocketLaunch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -35,15 +36,17 @@ import com.tony.appbooster.presentation.ui.theme.AppBoosterTheme
 import com.tony.appbooster.presentation.ui.theme.paddingMedium
 
 /**
- * Beautiful stats row showing optimization vs skipped apps.
+ * Beautiful stats row showing optimization vs skipped vs no-profile apps.
  *
  * @param needsOptimizationCount Number of apps that still need optimization.
  * @param optimizedCount Number of apps already optimized.
+ * @param noProfileCount Number of apps with no runtime profile (never used).
  */
 @Composable
 fun OptimizationStatsRow(
     needsOptimizationCount: Int,
-    optimizedCount: Int
+    optimizedCount: Int,
+    noProfileCount: Int = 0
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -66,6 +69,17 @@ fun OptimizationStatsRow(
             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
             icon = Icons.Rounded.CheckCircle
         )
+
+        if (noProfileCount > 0) {
+            StatCard(
+                modifier = Modifier.weight(1f),
+                count = noProfileCount,
+                label = stringResource(R.string.analysis_card_no_profile),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                icon = Icons.Rounded.PersonOff
+            )
+        }
     }
 }
 
@@ -142,7 +156,8 @@ private fun OptimizationStatsRowPreview() {
     AppBoosterTheme {
         OptimizationStatsRow(
             needsOptimizationCount = 42,
-            optimizedCount = 180
+            optimizedCount = 180,
+            noProfileCount = 23
         )
     }
 }
@@ -153,7 +168,8 @@ private fun OptimizationStatsRowLargeFontPreview() {
     AppBoosterTheme {
         OptimizationStatsRow(
             needsOptimizationCount = 120,
-            optimizedCount = 12
+            optimizedCount = 12,
+            noProfileCount = 0
         )
     }
 }

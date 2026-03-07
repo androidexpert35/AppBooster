@@ -140,7 +140,7 @@ fun DashboardHeroCard(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             AnimatedContent(
-                targetState = model.optimizationProgress.result,
+                targetState = model.optimizationProgress,
                 label = "heroResultSwap",
                 transitionSpec = {
                     (slideInVertically(
@@ -153,44 +153,52 @@ fun DashboardHeroCard(
                         ) + fadeOut(tween(200))
                     ).using(SizeTransform(clip = false))
                 }
-            ) { result ->
+            ) { progress ->
+                val result = progress.result
                 when {
                     result is OptimizationResult.Completed &&
-                        model.optimizationProgress.processedCount == 0 &&
-                        model.optimizationProgress.skippedCount > 0 &&
+                        progress.processedCount == 0 &&
+                        progress.skippedCount > 0 &&
                         !isResultDismissed -> {
-                        AllOptimizedContent(
-                            skippedCount = model.optimizationProgress.skippedCount,
+                        HeroResultPanel(
+                            status = HeroCardStatus.AllOptimized(
+                                optimizedCount = model.optimizationAnalysis.appsAlreadyOptimized,
+                                noProfileCount = model.optimizationAnalysis.appsWithNoProfile
+                            ),
                             onDismiss = onDismissResult
                         )
                     }
 
                     result is OptimizationResult.Completed && !isResultDismissed -> {
-                        OptimizationCompletedContent(
-                            processedCount = model.optimizationProgress.processedCount,
-                            skippedCount = model.optimizationProgress.skippedCount,
-                            totalCount = model.optimizationProgress.totalCount,
+                        HeroResultPanel(
+                            status = HeroCardStatus.Completed(
+                                processedCount = progress.processedCount,
+                                skippedCount = progress.skippedCount,
+                                totalCount = progress.totalCount
+                            ),
                             onDismiss = onDismissResult,
                             onRunAgain = onStartOptimization
                         )
                     }
 
                     result is OptimizationResult.Canceled && !isResultDismissed -> {
-                        OptimizationCanceledContent(
-                            processedCount = model.optimizationProgress.processedCount,
-                            skippedCount = model.optimizationProgress.skippedCount,
-                            totalCount = model.optimizationProgress.totalCount,
+                        HeroResultPanel(
+                            status = HeroCardStatus.Canceled(
+                                processedCount = progress.processedCount,
+                                skippedCount = progress.skippedCount,
+                                totalCount = progress.totalCount
+                            ),
                             onDismiss = onDismissResult,
                             onRunAgain = onStartOptimization
                         )
                     }
 
-                    model.optimizationProgress.isRunning -> {
+                    progress.isRunning -> {
                         ProcessProgressContent(
                             title = stringResource(R.string.dashboard_optimizing_title),
-                            subtitle = "${model.optimizationProgress.processedCount} / ${model.optimizationProgress.totalCount} apps",
-                            progress = model.optimizationProgress.progress,
-                            currentPackage = model.optimizationProgress.currentAppPackage,
+                            subtitle = "${progress.processedCount} / ${progress.totalCount} apps",
+                            progress = progress.progress,
+                            currentPackage = progress.currentAppPackage,
                             onStop = onStopOptimization
                         )
                     }
@@ -335,7 +343,8 @@ private fun ReadyContent(
             analysis.hasScanned -> {
                 OptimizationStatsRow(
                     needsOptimizationCount = analysis.appsNeedingOptimization,
-                    optimizedCount = analysis.appsAlreadyOptimized
+                    optimizedCount = analysis.appsAlreadyOptimized,
+                    noProfileCount = analysis.appsWithNoProfile
                 )
             }
 

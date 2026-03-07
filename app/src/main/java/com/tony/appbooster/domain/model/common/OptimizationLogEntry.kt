@@ -43,5 +43,7 @@ enum class LogEntryType {
     /** Command being executed */
     COMMAND,
     /** Analyzing apps */
-    ANALYZING
+    ANALYZING,
+    /** App has no runtime profile (never used by the user) */
+    NO_PROFILE
 }

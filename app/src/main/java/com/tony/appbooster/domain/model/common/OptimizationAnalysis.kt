@@ -10,6 +10,8 @@ package com.tony.appbooster.domain.model.common
  * @property totalAppsToScan Total number of apps to be scanned (for progress calculation).
  * @property appsNeedingOptimization Number of apps that need optimization.
  * @property appsAlreadyOptimized Number of apps that are already optimized (will be skipped).
+ * @property appsWithNoProfile Number of apps with no runtime profile (never used, "verify" filter).
+ *           These cannot benefit from profile-guided optimization.
  * @property packagesNeedingOptimization List of package names that need optimization (cached for reuse).
  * @property isScanning Whether the analysis is currently in progress.
  * @property currentPackage Package currently being analyzed, empty if not scanning.
@@ -20,6 +22,7 @@ data class OptimizationAnalysis(
     val totalAppsToScan: Int = 0,
     val appsNeedingOptimization: Int = 0,
     val appsAlreadyOptimized: Int = 0,
+    val appsWithNoProfile: Int = 0,
     val packagesNeedingOptimization: List<String> = emptyList(),
     val isScanning: Boolean = false,
     val currentPackage: String = "",

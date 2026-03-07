@@ -140,8 +140,8 @@ class AppCompilationInfoTest {
     }
 
     @Test
-    fun `given verify filter when shouldOptimize then returns true regardless of age`() {
-        assertTrue(
+    fun `given verify filter with speed-profile target when shouldOptimize then returns false (no profile)`() {
+        assertFalse(
             AppCompilationInfo.shouldOptimize(
                 compilerFilter = "verify",
                 lastCompilationTimeMs = now - 1_000L,
@@ -149,6 +149,31 @@ class AppCompilationInfoTest {
                 targetFilter = "speed-profile"
             )
         )
+    }
+
+    @Test
+    fun `given verify filter with speed target when shouldOptimize then returns true (full AOT ignores profiles)`() {
+        assertTrue(
+            AppCompilationInfo.shouldOptimize(
+                compilerFilter = "verify",
+                lastCompilationTimeMs = now - 1_000L,
+                lastUpdateTimeMs = null,
+                targetFilter = "speed"
+            )
+        )
+    }
+
+    @Test
+    fun `given verify filter with speed-profile target when evaluateOptimization then skip with NoProfile reason`() {
+        val (needs, reason) = AppCompilationInfo.evaluateOptimization(
+            compilerFilter = "verify",
+            lastCompilationTimeMs = now - 1_000L,
+            lastUpdateTimeMs = null,
+            targetFilter = "speed-profile",
+            oatFileExists = true
+        )
+        assertFalse(needs)
+        assertTrue(reason is AppCompilationInfo.SkipReason.NoProfile)
     }
 }
 

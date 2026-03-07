@@ -681,3 +681,55 @@ fun `given data updates when observing then emits all values`() = runTest {
 - `*UiModel.kt` – UI state models
 - `*Screen.kt` – Composable screens
 - `*Module.kt` – Hilt DI modules
+- `*Status.kt` – Sealed state/status types that drive composables (e.g. `HeroCardStatus.kt`)
+
+---
+
+## 11. Component File Separation
+
+### Rule: Models and State Types Live in Their Own Files
+
+Never embed data classes, sealed classes/interfaces, or enums inside a composable file.
+Every type that represents a component's state or input data must have its own dedicated file.
+
+```
+components/
+├── HeroCardStatus.kt       ← sealed interface / enum with all variants
+├── HeroResultPanel.kt      ← composable(s) only – no top-level data types
+└── DashboardStats.kt       ← composable(s) only
+```
+
+- ✅ One file per public type: `HeroCardStatus.kt` contains only `HeroCardStatus`
+- ✅ Composable files contain only `@Composable` functions and their private config helpers
+- ✅ Private internal config data classes (e.g. `HeroResultConfig`) may stay inside the composable file because they are not public API
+- ❌ Never declare a public `data class`, `sealed class/interface`, or `enum class` inside a composable file
+
+### Rule: Generalize Repeated Composables with a Sealed Status Type
+
+When multiple composables share the same visual structure but differ only in data or
+visual tokens (icon, colour, title, button visibility), replace them with:
+
+1. A **sealed interface/class** capturing every variant and its data (`*Status.kt`)
+2. A **single reusable composable** driven by that sealed type
+
+```kotlin
+// ✅ One sealed type describes all variants
+sealed interface HeroCardStatus {
+    data class Completed(val processedCount: Int, ...) : HeroCardStatus
+    data class Canceled(val processedCount: Int, ...) : HeroCardStatus
+    data class AllOptimized(val optimizedCount: Int, ...) : HeroCardStatus
+}
+
+// ✅ One composable handles all variants – no duplication
+@Composable
+fun HeroResultPanel(
+    status: HeroCardStatus,
+    modifier: Modifier = Modifier,
+    onDismiss: () -> Unit,
+    onRunAgain: () -> Unit = {}
+) { ... }
+```
+
+- ✅ Visual token resolution is delegated to a private `*Config` data class resolved via `remember*Config(status)`
+- ✅ The `when(status)` branch lives in the config resolver, not scattered across the composable body
+- ❌ Do not maintain separate `CompletedContent`, `CanceledContent`, `AllOptimizedContent` composables that are structurally identical

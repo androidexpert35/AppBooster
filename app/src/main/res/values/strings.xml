@@ -209,5 +209,6 @@
     <string name="analysis_skip_reason_optimal">Already optimal</string>
     <string name="analysis_card_needs_optimization">Needs Optimization</string>
     <string name="analysis_card_optimized">Optimized</string>
+    <string name="analysis_card_no_profile">No Profile</string>
     <string name="analysis_view_details">View Details</string>
 </resources>

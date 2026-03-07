@@ -35,6 +35,7 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.PersonOff
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RocketLaunch
 import androidx.compose.material.icons.rounded.Search
@@ -431,6 +432,11 @@ private fun ActivityLogItem(
                 Icons.Rounded.Search,
                 Color(0xFF00BCD4),
                 Color(0xFF00BCD4).copy(alpha = 0.1f)
+            )
+            LogEntryType.NO_PROFILE -> Triple(
+                Icons.Rounded.PersonOff,
+                Color(0xFF78909C),
+                Color(0xFF78909C).copy(alpha = 0.1f)
             )
             else -> Triple(
                 Icons.Rounded.Info,

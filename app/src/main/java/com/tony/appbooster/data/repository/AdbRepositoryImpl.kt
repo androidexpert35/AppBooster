@@ -244,7 +244,9 @@ class AdbRepositoryImpl @Inject constructor(
                 )
 
                 packagesToOptimize = existingAnalysis.packagesNeedingOptimization
-                skippedCount = existingAnalysis.appsAlreadyOptimized
+                // No-profile apps are also skipped this run — include them in the skipped count
+                // so result panels show the correct number of apps not being compiled.
+                skippedCount = existingAnalysis.appsAlreadyOptimized + existingAnalysis.appsWithNoProfile
             } else {
                 // Perform fresh analysis using the single source of truth.
                 addLog("Analyzing optimization status...")
@@ -257,7 +259,7 @@ class AdbRepositoryImpl @Inject constructor(
                 when (val analysisResource = analyzeOptimizationStatus(mode)) {
                     is Resource.Success -> {
                         packagesToOptimize = analysisResource.data.packagesNeedingOptimization
-                        skippedCount = analysisResource.data.appsAlreadyOptimized
+                        skippedCount = analysisResource.data.appsAlreadyOptimized + analysisResource.data.appsWithNoProfile
                     }
 
                     is Resource.Error -> {
@@ -386,11 +388,15 @@ class AdbRepositoryImpl @Inject constructor(
             addLog("✓ Optimization complete! $total apps optimized, $skippedCount skipped.")
             addLogEntry(LogEntryType.COMPLETE, "Optimization complete!", detail = "$total apps optimized")
 
-            // Update analysis to reflect that all apps are now optimized
+            // Update analysis to reflect that all targeted apps are now optimized.
+            // Preserve the real appsAlreadyOptimized and appsWithNoProfile counts from the
+            // analysis — previously optimized + newly compiled = total optimized now.
+            val prevAnalysis = _optimizationAnalysis.value
             _optimizationAnalysis.value = OptimizationAnalysis(
                 totalAppsScanned = allPackages.size,
                 appsNeedingOptimization = 0,
-                appsAlreadyOptimized = allPackages.size,
+                appsAlreadyOptimized = prevAnalysis.appsAlreadyOptimized + total,
+                appsWithNoProfile = prevAnalysis.appsWithNoProfile,
                 isScanning = false,
                 lastScanTimeMs = System.currentTimeMillis()
             )
@@ -469,6 +475,7 @@ class AdbRepositoryImpl @Inject constructor(
             val compileMode = mode.value
             var needsOptimization = 0
             var alreadyOptimized = 0
+            var noProfile = 0
             val totalApps = allPackages.size
             val packagesNeedingOptimizationList = mutableListOf<String>()
 
@@ -507,15 +514,33 @@ class AdbRepositoryImpl @Inject constructor(
                         detail = compilationInfo.compilerFilter?.let { "Current: $it" } ?: "Not compiled"
                     )
                 } else {
-                    alreadyOptimized++
-                    // Show apps that are already optimized
                     val reason = when (val skip = compilationInfo.skipReason) {
-                        is AppCompilationInfo.SkipReason.RecentlyOptimized -> "Optimized (${skip.filter})"
-                        is AppCompilationInfo.SkipReason.AlreadyOptimal -> "Optimal (${skip.filter})"
-                        else -> "Already optimized"
+                        is AppCompilationInfo.SkipReason.RecentlyOptimized -> {
+                            alreadyOptimized++
+                            "Optimized (${skip.filter})"
+                        }
+                        is AppCompilationInfo.SkipReason.AlreadyOptimal -> {
+                            alreadyOptimized++
+                            "Optimal (${skip.filter})"
+                        }
+                        is AppCompilationInfo.SkipReason.NoProfile -> {
+                            noProfile++
+                            "No profile (never used)"
+                        }
+                        else -> {
+                            alreadyOptimized++
+                            "Already optimized"
+                        }
                     }
+
+                    val logType = if (compilationInfo.skipReason is AppCompilationInfo.SkipReason.NoProfile) {
+                        LogEntryType.NO_PROFILE
+                    } else {
+                        LogEntryType.SUCCESS
+                    }
+
                     addLogEntry(
-                        LogEntryType.SUCCESS,
+                        logType,
                         reason,
                         packageName = packageName
                     )
@@ -525,7 +550,8 @@ class AdbRepositoryImpl @Inject constructor(
                 _optimizationAnalysis.value = _optimizationAnalysis.value.copy(
                     totalAppsScanned = index + 1,
                     appsNeedingOptimization = needsOptimization,
-                    appsAlreadyOptimized = alreadyOptimized
+                    appsAlreadyOptimized = alreadyOptimized,
+                    appsWithNoProfile = noProfile
                 )
             }
 
@@ -534,6 +560,7 @@ class AdbRepositoryImpl @Inject constructor(
                 totalAppsToScan = allPackages.size,
                 appsNeedingOptimization = needsOptimization,
                 appsAlreadyOptimized = alreadyOptimized,
+                appsWithNoProfile = noProfile,
                 packagesNeedingOptimization = packagesNeedingOptimizationList,
                 isScanning = false,
                 currentPackage = "",
@@ -542,10 +569,11 @@ class AdbRepositoryImpl @Inject constructor(
             _optimizationAnalysis.value = result
 
             // Add completion log entry
+            val noProfileSuffix = if (noProfile > 0) ", $noProfile no profile" else ""
             addLogEntry(
                 LogEntryType.COMPLETE,
                 "Analysis complete",
-                detail = "$needsOptimization need optimization, $alreadyOptimized already optimized"
+                detail = "$needsOptimization need optimization, $alreadyOptimized already optimized$noProfileSuffix"
             )
 
             result
@@ -866,6 +894,14 @@ class AdbRepositoryImpl @Inject constructor(
             filter == null -> {
                 needsOptimization = true
                 skipReason = null
+            }
+
+            // "verify" means no runtime profile exists — the user has never opened the app.
+            // Profile-guided compilation (speed-profile) is pointless without a profile.
+            // For full (speed) mode, we still compile since it doesn't rely on profiles.
+            filter == "verify" && targetFilter.lowercase() == "speed-profile" -> {
+                needsOptimization = false
+                skipReason = AppCompilationInfo.SkipReason.NoProfile(filter)
             }
 
             // Some Android builds only list certain packages (often overlays/RRO) in the Dexopt state section
