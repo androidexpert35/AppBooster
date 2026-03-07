@@ -144,10 +144,6 @@ internal fun ProcessProgressContent(
             }
         }
 
-        // ── Live stats – same dot-row surface as the result panel ─────────
-        if (state.statChips.isNotEmpty()) {
-            OptimizationStatsRow(chips = state.statChips)
-        }
 
         // ── Stop button ───────────────────────────────────────────────────
         Surface(

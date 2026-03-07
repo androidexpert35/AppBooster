@@ -80,40 +80,6 @@ fun OptimizationStatsRow(
     }
 }
 
-/**
- * Chip-list overload of [OptimizationStatsRow] used by in-progress scanning states.
- *
- * Renders each [ProcessStatChip] as a dot-leading stat row inside the same tonal
- * surface as the named-params overload, so the scanning card looks identical to
- * the result-panel stats surface.
- *
- * @param chips Live stat chips produced by [ProcessProgressState.fromOptimizationAnalysis].
- */
-@Composable
-fun OptimizationStatsRow(chips: List<ProcessStatChip>) {
-    if (chips.isEmpty()) return
-    val colorScheme = MaterialTheme.colorScheme
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = colorScheme.surfaceContainerLow,
-        tonalElevation = 1.dp
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            chips.forEach { chip ->
-                val dotColor = when (chip.style) {
-                    ProcessStatChipStyle.Pending -> colorScheme.primary
-                    ProcessStatChipStyle.Neutral -> colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    ProcessStatChipStyle.Done    -> colorScheme.tertiary
-                }
-                StatRow(count = chip.count, label = chip.label, dotColor = dotColor)
-            }
-        }
-    }
-}
 
 /**
  * Single icon-leading stat row: coloured dot • bold count • flexible label.
