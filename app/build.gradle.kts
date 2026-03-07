@@ -1,3 +1,22 @@
+val releaseKeystorePath = providers.gradleProperty("ghReleaseKeystorePath")
+    .orElse(providers.environmentVariable("GH_RELEASE_KEYSTORE_PATH"))
+    .orNull
+val releaseKeyAlias = providers.gradleProperty("ghReleaseKeyAlias")
+    .orElse(providers.environmentVariable("GH_RELEASE_KEY_ALIAS"))
+    .orNull
+val releaseKeyPassword = providers.gradleProperty("ghReleaseKeyPassword")
+    .orElse(providers.environmentVariable("GH_RELEASE_KEY_PASSWORD"))
+    .orNull
+val releaseStorePassword = providers.gradleProperty("ghReleaseStorePassword")
+    .orElse(providers.environmentVariable("GH_RELEASE_STORE_PASSWORD"))
+    .orNull
+val hasReleaseSigning = listOf(
+    releaseKeystorePath,
+    releaseKeyAlias,
+    releaseKeyPassword,
+    releaseStorePassword
+).all { !it.isNullOrBlank() }
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -21,6 +40,18 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                // CI injects the keystore path at runtime so local debug builds stay zero-config.
+                storeFile = file(releaseKeystorePath ?: error("Missing release keystore path."))
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     packaging {
         resources {
             excludes += "META-INF/AL2.0"
@@ -35,6 +66,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

@@ -7,9 +7,17 @@
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
+/.idea/deploymentTargetSelector.xml
 .DS_Store
 /build
 /captures
 .externalNativeBuild
 .cxx
 local.properties
+
+# Local signing material
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.bks

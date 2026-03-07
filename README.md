@@ -236,6 +236,31 @@ cd OptiDroid
 | `debug` | Development build with debugging enabled |
 | `release` | Optimized build (ProGuard rules included) |
 
+### GitHub Actions CI
+
+The repository includes a GitHub Actions workflow at `.github/workflows/android-ci.yml` with three jobs:
+
+| Job | Trigger | What it does |
+|-----|---------|--------------|
+| **Unit tests** | Every push & PR | Runs `./gradlew runUnitTests` (the existing Gradle task) |
+| **Signed release build** | Push to `master` only, after tests pass | Builds signed APK + AAB |
+| **Publish GitHub Release** | After signed build succeeds | Creates a GitHub Release with the **merged PR body as changelog** and attaches the APK & AAB |
+
+The release tag is derived automatically from `versionName` and `versionCode` in `app/build.gradle.kts` (e.g. `v1.0-1`).
+
+> **Changelog**: When you merge a PR into `master`, the CI extracts the PR description and uses it as the release notes. If no matching PR is found (e.g. a direct push), it falls back to the last 10 commit messages.
+
+Configure these repository secrets:
+
+| Secret | Purpose |
+|--------|---------|
+| `GH_RELEASE_KEYSTORE_BASE64` | Base64-encoded contents of the release keystore file |
+| `GH_RELEASE_KEY_ALIAS` | Alias of the release key inside the keystore |
+| `GH_RELEASE_KEY_PASSWORD` | Password for the selected key alias |
+| `GH_RELEASE_STORE_PASSWORD` | Password for the keystore itself |
+
+All four secrets are **required** for the release & publish jobs. Unit tests still run on every push and PR regardless of secrets.
+
 ---
 
 ## 🧪 Testing

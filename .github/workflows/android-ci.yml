@@ -1,0 +1,202 @@
+name: Android CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write          # required to create GitHub Releases
+
+jobs:
+
+  # ───────────────────────────────────────────────────────────────
+  # 1. Unit tests  –  must pass before anything else
+  # ───────────────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Run unit tests (runUnitTests)
+        run: ./gradlew --no-daemon runUnitTests
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          retention-days: 14
+          path: app/build/reports/tests/testDebugUnitTest/**
+
+  # ───────────────────────────────────────────────────────────────
+  # 2. Signed release build  –  only after tests pass, master only
+  # ───────────────────────────────────────────────────────────────
+  signed-release:
+    name: Signed release build
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    timeout-minutes: 45
+
+    outputs:
+      version_name: ${{ steps.version.outputs.version_name }}
+      version_code: ${{ steps.version.outputs.version_code }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Read version from build config
+        id: version
+        run: |
+          version_name=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          version_code=$(grep -oP 'versionCode\s*=\s*\K\d+' app/build.gradle.kts)
+          echo "version_name=${version_name}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
+          echo "### Version info" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **versionName**: ${version_name}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **versionCode**: ${version_code}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prepare signing keystore
+        env:
+          GH_RELEASE_KEYSTORE_BASE64: ${{ secrets.GH_RELEASE_KEYSTORE_BASE64 }}
+          GH_RELEASE_KEY_ALIAS:       ${{ secrets.GH_RELEASE_KEY_ALIAS }}
+          GH_RELEASE_KEY_PASSWORD:    ${{ secrets.GH_RELEASE_KEY_PASSWORD }}
+          GH_RELEASE_STORE_PASSWORD:  ${{ secrets.GH_RELEASE_STORE_PASSWORD }}
+        run: |
+          for secret in GH_RELEASE_KEYSTORE_BASE64 GH_RELEASE_KEY_ALIAS GH_RELEASE_KEY_PASSWORD GH_RELEASE_STORE_PASSWORD; do
+            if [ -z "${!secret}" ]; then
+              echo "::error::Required secret $secret is not configured."
+              exit 1
+            fi
+          done
+
+          keystore_path="$RUNNER_TEMP/release-keystore.jks"
+          echo "$GH_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+
+          {
+            echo "GH_RELEASE_KEYSTORE_PATH=$keystore_path"
+            echo "GH_RELEASE_KEY_ALIAS=$GH_RELEASE_KEY_ALIAS"
+            echo "GH_RELEASE_KEY_PASSWORD=$GH_RELEASE_KEY_PASSWORD"
+            echo "GH_RELEASE_STORE_PASSWORD=$GH_RELEASE_STORE_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Assemble signed release APK & AAB
+        run: ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease
+
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-release-artifacts
+          retention-days: 30
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
+
+  # ───────────────────────────────────────────────────────────────
+  # 3. Publish GitHub Release  –  uses merged PR body as changelog
+  # ───────────────────────────────────────────────────────────────
+  publish-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: signed-release
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download signed artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: signed-release-artifacts
+          path: release-artifacts
+
+      - name: Extract changelog from merged PR
+        id: changelog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find the PR whose merge commit matches this push
+          pr_number=$(gh pr list \
+            --state merged \
+            --base master \
+            --json number,mergeCommit \
+            --jq ".[] | select(.mergeCommit.oid == \"${{ github.sha }}\") | .number")
+
+          if [ -n "$pr_number" ]; then
+            echo "Matched merged PR #${pr_number}"
+            pr_body=$(gh pr view "$pr_number" --json body --jq '.body')
+          else
+            echo "No merged PR found for ${{ github.sha }}, falling back to recent commits."
+            pr_body=$(git log --pretty=format:'- %s' -10)
+          fi
+
+          # Write multiline body to GITHUB_OUTPUT
+          {
+            echo "body<<CHANGELOG_EOF"
+            echo "$pr_body"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v${{ needs.signed-release.outputs.version_name }}-${{ needs.signed-release.outputs.version_code }}"
+
+          # Collect APK and AAB files
+          files=$(find release-artifacts -type f \( -name '*.apk' -o -name '*.aab' \))
+
+          gh release create "$tag" \
+            --title "Release ${{ needs.signed-release.outputs.version_name }} (${{ needs.signed-release.outputs.version_code }})" \
+            --notes "${{ steps.changelog.outputs.body }}" \
+            --target "${{ github.sha }}" \
+            $files
+
