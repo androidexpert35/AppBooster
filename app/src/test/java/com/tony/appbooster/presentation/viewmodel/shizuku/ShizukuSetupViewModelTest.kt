@@ -76,67 +76,65 @@ class ShizukuSetupViewModelTest {
     // ── Initial state ─────────────────────────────────────────────────────────
 
     @Test
-    fun `given NotRunning initial state when ViewModel created then setupStep is START_SERVICE`() = runTest {
+    fun `given NotRunning initial state when ViewModel created then shizukuState is NotRunning`() = runTest {
         shizukuStateFlow.value = ShizukuState.NotRunning
         val vm = createViewModel()
         advanceUntilIdle()
 
-        assertEquals(ShizukuSetupStep.START_SERVICE, vm.uiState.value.setupStep)
+        assertEquals(ShizukuState.NotRunning, vm.uiState.value.shizukuState)
     }
 
     @Test
-    fun `given Ready initial state when ViewModel created then setupStep is READY`() = runTest {
+    fun `given Ready initial state when ViewModel created then shizukuState is Ready`() = runTest {
         shizukuStateFlow.value = ShizukuState.Ready
         val vm = createViewModel()
         advanceUntilIdle()
 
-        assertEquals(ShizukuSetupStep.READY, vm.uiState.value.setupStep)
+        assertEquals(ShizukuState.Ready, vm.uiState.value.shizukuState)
     }
 
     @Test
-    fun `given NotInstalled initial state when ViewModel created then setupStep is INSTALL_SHIZUKU`() = runTest {
+    fun `given NotInstalled initial state when ViewModel created then shizukuState is NotInstalled`() = runTest {
         shizukuStateFlow.value = ShizukuState.NotInstalled
         val vm = createViewModel()
         advanceUntilIdle()
 
-        assertEquals(ShizukuSetupStep.INSTALL_SHIZUKU, vm.uiState.value.setupStep)
+        assertEquals(ShizukuState.NotInstalled, vm.uiState.value.shizukuState)
     }
 
     @Test
-    fun `given PermissionRequired initial state when ViewModel created then setupStep is GRANT_PERMISSION`() = runTest {
+    fun `given PermissionRequired initial state when ViewModel created then shizukuState is PermissionRequired`() = runTest {
         shizukuStateFlow.value = ShizukuState.PermissionRequired
         val vm = createViewModel()
         advanceUntilIdle()
 
-        assertEquals(ShizukuSetupStep.GRANT_PERMISSION, vm.uiState.value.setupStep)
+        assertEquals(ShizukuState.PermissionRequired, vm.uiState.value.shizukuState)
     }
 
     @Test
-    fun `given Error initial state when ViewModel created then setupStep is CHECK_STATUS`() = runTest {
-        shizukuStateFlow.value = ShizukuState.Error("something failed")
+    fun `given Error initial state when ViewModel created then shizukuState is Error`() = runTest {
+        val errorState = ShizukuState.Error("something failed")
+        shizukuStateFlow.value = errorState
         val vm = createViewModel()
         advanceUntilIdle()
 
-        assertEquals(ShizukuSetupStep.CHECK_STATUS, vm.uiState.value.setupStep)
+        assertEquals(errorState, vm.uiState.value.shizukuState)
     }
 
     // ── State transitions from Flow ───────────────────────────────────────────
 
     @Test
-    fun `given state changes to Ready when observing then uiState reflects READY step`() = runTest {
+    fun `given state changes to Ready when observing then uiState reflects latest shizukuState`() = runTest {
         shizukuStateFlow.value = ShizukuState.NotRunning
         val vm = createViewModel()
         advanceUntilIdle()
 
         vm.uiState.test {
-            // Consume current state
             val initial = awaitItem()
-            assertEquals(ShizukuSetupStep.START_SERVICE, initial.setupStep)
+            assertEquals(ShizukuState.NotRunning, initial.shizukuState)
 
-            // Emit new state
             shizukuStateFlow.value = ShizukuState.Ready
             val updated = awaitItem()
-            assertEquals(ShizukuSetupStep.READY, updated.setupStep)
             assertEquals(ShizukuState.Ready, updated.shizukuState)
 
             cancelAndIgnoreRemainingEvents()
@@ -144,17 +142,17 @@ class ShizukuSetupViewModelTest {
     }
 
     @Test
-    fun `given state changes to PermissionRequired when observing then uiState reflects GRANT_PERMISSION step`() = runTest {
+    fun `given state changes to PermissionRequired when observing then uiState reflects latest shizukuState`() = runTest {
         shizukuStateFlow.value = ShizukuState.NotInstalled
         val vm = createViewModel()
         advanceUntilIdle()
 
         vm.uiState.test {
-            awaitItem() // consume initial
+            awaitItem()
 
             shizukuStateFlow.value = ShizukuState.PermissionRequired
             val updated = awaitItem()
-            assertEquals(ShizukuSetupStep.GRANT_PERMISSION, updated.setupStep)
+            assertEquals(ShizukuState.PermissionRequired, updated.shizukuState)
 
             cancelAndIgnoreRemainingEvents()
         }
@@ -170,7 +168,6 @@ class ShizukuSetupViewModelTest {
         vm.refreshState()
         advanceUntilIdle()
 
-        // refreshShizukuState is called once in init + once explicitly
         coVerify(atLeast = 1) { refreshShizukuState() }
     }
 
@@ -180,7 +177,7 @@ class ShizukuSetupViewModelTest {
         advanceUntilIdle()
 
         vm.uiState.test {
-            awaitItem() // initial state (not checking)
+            awaitItem()
 
             vm.refreshState()
             val checking = awaitItem()
@@ -242,4 +239,3 @@ class ShizukuSetupViewModelTest {
         coVerify(atLeast = 2) { refreshShizukuState() }
     }
 }
-

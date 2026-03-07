@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
@@ -107,6 +108,7 @@ private fun ShizukuSetupContent(
     onRefreshClicked: () -> Unit
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val setupStep = remember(uiState.shizukuState) { uiState.shizukuState.toSetupStep() }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -153,14 +155,14 @@ private fun ShizukuSetupContent(
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             // Hero Section
-            ShizukuHeroSection(step = uiState.setupStep)
+            ShizukuHeroSection(step = setupStep)
 
             // Progress Indicator
-            SetupProgressIndicator(step = uiState.setupStep)
+            SetupProgressIndicator(step = setupStep)
 
             // Step Content
             AnimatedContent(
-                targetState = uiState.setupStep,
+                targetState = setupStep,
                 transitionSpec = {
                     (slideInVertically { it / 4 } + fadeIn()) togetherWith
                             (slideOutVertically { -it / 4 } + fadeOut())
@@ -192,6 +194,17 @@ private fun ShizukuSetupContent(
     }
 }
 
+/** Maps the current [ShizukuState] to the visual step shown in the setup wizard. */
+private fun ShizukuState.toSetupStep(): ShizukuSetupStep {
+    return when (this) {
+        ShizukuState.NotInstalled -> ShizukuSetupStep.INSTALL_SHIZUKU
+        ShizukuState.NotRunning -> ShizukuSetupStep.START_SERVICE
+        ShizukuState.PermissionRequired -> ShizukuSetupStep.GRANT_PERMISSION
+        ShizukuState.Ready -> ShizukuSetupStep.READY
+        is ShizukuState.Error -> ShizukuSetupStep.CHECK_STATUS
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Previews
 // ─────────────────────────────────────────────────────────────────────────────
@@ -202,10 +215,7 @@ private fun ShizukuSetupContent(
 private fun ShizukuSetupInstallPreview() {
     AppBoosterTheme {
         ShizukuSetupContent(
-            uiState = ShizukuSetupUiModel(
-                shizukuState = ShizukuState.NotInstalled,
-                setupStep = ShizukuSetupStep.INSTALL_SHIZUKU
-            ),
+            uiState = ShizukuSetupUiModel(shizukuState = ShizukuState.NotInstalled),
             onInstallClicked = {},
             onOpenShizukuClicked = {},
             onRequestPermissionClicked = {},
@@ -219,10 +229,7 @@ private fun ShizukuSetupInstallPreview() {
 private fun ShizukuSetupStartServicePreview() {
     AppBoosterTheme {
         ShizukuSetupContent(
-            uiState = ShizukuSetupUiModel(
-                shizukuState = ShizukuState.NotRunning,
-                setupStep = ShizukuSetupStep.START_SERVICE
-            ),
+            uiState = ShizukuSetupUiModel(shizukuState = ShizukuState.NotRunning),
             onInstallClicked = {},
             onOpenShizukuClicked = {},
             onRequestPermissionClicked = {},
@@ -236,10 +243,7 @@ private fun ShizukuSetupStartServicePreview() {
 private fun ShizukuSetupPermissionPreview() {
     AppBoosterTheme {
         ShizukuSetupContent(
-            uiState = ShizukuSetupUiModel(
-                shizukuState = ShizukuState.PermissionRequired,
-                setupStep = ShizukuSetupStep.GRANT_PERMISSION
-            ),
+            uiState = ShizukuSetupUiModel(shizukuState = ShizukuState.PermissionRequired),
             onInstallClicked = {},
             onOpenShizukuClicked = {},
             onRequestPermissionClicked = {},
@@ -253,10 +257,7 @@ private fun ShizukuSetupPermissionPreview() {
 private fun ShizukuSetupReadyPreview() {
     AppBoosterTheme {
         ShizukuSetupContent(
-            uiState = ShizukuSetupUiModel(
-                shizukuState = ShizukuState.Ready,
-                setupStep = ShizukuSetupStep.READY
-            ),
+            uiState = ShizukuSetupUiModel(shizukuState = ShizukuState.Ready),
             onInstallClicked = {},
             onOpenShizukuClicked = {},
             onRequestPermissionClicked = {},

@@ -3,7 +3,6 @@ package com.tony.appbooster.presentation.viewmodel.shizuku
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tony.appbooster.domain.model.shizuku.ShizukuState
 import com.tony.appbooster.domain.usecase.shizuku.ObserveShizukuStateUseCase
 import com.tony.appbooster.domain.usecase.shizuku.OpenShizukuAppUseCase
 import com.tony.appbooster.domain.usecase.shizuku.OpenShizukuInstallPageUseCase
@@ -23,7 +22,8 @@ import javax.inject.Inject
  * ViewModel for the Shizuku setup flow.
  *
  * Manages the state of Shizuku authorization and guides the user through
- * the setup process step by step.
+ * the setup process. The screen derives the visual step directly from [com.tony.appbooster.domain.model.shizuku.ShizukuState]
+ * so the ViewModel keeps only one source of truth.
  */
 @HiltViewModel
 class ShizukuSetupViewModel @Inject constructor(
@@ -49,22 +49,11 @@ class ShizukuSetupViewModel @Inject constructor(
                 _uiState.update { current ->
                     current.copy(
                         shizukuState = shizukuState,
-                        setupStep = mapStateToStep(shizukuState),
                         isCheckingState = false
                     )
                 }
             }
             .launchIn(viewModelScope)
-    }
-
-    private fun mapStateToStep(state: ShizukuState): ShizukuSetupStep {
-        return when (state) {
-            ShizukuState.NotInstalled -> ShizukuSetupStep.INSTALL_SHIZUKU
-            ShizukuState.NotRunning -> ShizukuSetupStep.START_SERVICE
-            ShizukuState.PermissionRequired -> ShizukuSetupStep.GRANT_PERMISSION
-            ShizukuState.Ready -> ShizukuSetupStep.READY
-            is ShizukuState.Error -> ShizukuSetupStep.CHECK_STATUS
-        }
     }
 
     /**

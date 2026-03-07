@@ -2,8 +2,6 @@ package com.tony.appbooster.presentation.viewmodel.main
 
 import android.content.Context
 import app.cash.turbine.test
-import com.tony.appbooster.presentation.navigation.interfaces.NavigationManager
-import com.tony.appbooster.presentation.viewmodel.base.UIStatus
 import com.tony.appbooster.domain.model.common.OptimizationAnalysis
 import com.tony.appbooster.domain.model.common.OptimizationProgress
 import com.tony.appbooster.domain.model.common.OptimizationResult
@@ -17,12 +15,13 @@ import com.tony.appbooster.domain.usecase.analysis.ObserveOptimizationAnalysisUs
 import com.tony.appbooster.domain.usecase.analysis.StartAnalysisUseCase
 import com.tony.appbooster.domain.usecase.analysis.StopAnalysisUseCase
 import com.tony.appbooster.domain.usecase.optimization.DismissOptimizationResultUseCase
-import com.tony.appbooster.domain.usecase.optimization.ObserveCommandOutputUseCase
 import com.tony.appbooster.domain.usecase.optimization.ObserveOptimizationLogEntriesUseCase
 import com.tony.appbooster.domain.usecase.optimization.ObserveOptimizationProgressUseCase
 import com.tony.appbooster.domain.usecase.optimization.StartOptimizationUseCase
 import com.tony.appbooster.domain.usecase.optimization.StopOptimizationUseCase
 import com.tony.appbooster.domain.usecase.settings.ObserveAppOptimizationTypeUseCase
+import com.tony.appbooster.presentation.navigation.interfaces.NavigationManager
+import com.tony.appbooster.presentation.viewmodel.base.UIStatus
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -47,27 +46,23 @@ import org.junit.Test
  * Unit tests for [MainViewModel].
  *
  * Tests verify UDF contract: events → state/effects, correct use-case delegation,
- * and that the dismissedResultRunIds set tracks in-memory dismissals.
+ * and that the current result dismissal flag stays in sync with the active run.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
-    // ── Flows ──────────────────────────────────────────────────────────────────
     private val connectionStateFlow = MutableStateFlow<AdbConnectionState>(AdbConnectionState.Disconnected)
-    private val commandOutputFlow = MutableStateFlow<List<String>>(emptyList())
     private val logEntriesFlow = MutableStateFlow<List<com.tony.appbooster.domain.model.common.OptimizationLogEntry>>(emptyList())
     private val progressFlow = MutableStateFlow(OptimizationProgress())
     private val analysisFlow = MutableStateFlow(OptimizationAnalysis())
 
-    // ── Use cases ──────────────────────────────────────────────────────────────
     private lateinit var connectAdbUseCase: ConnectAdbUseCase
     private lateinit var stopOptimizationUseCase: StopOptimizationUseCase
     private lateinit var stopAnalysisUseCase: StopAnalysisUseCase
-    private lateinit var getOptimizeAppUseCase: ObserveAppOptimizationTypeUseCase
+    private lateinit var observeAppOptimizationTypeUseCase: ObserveAppOptimizationTypeUseCase
     private lateinit var observeAdbConnectionStateUseCase: ObserveAdbConnectionStateUseCase
-    private lateinit var observeCommandOutputUseCase: ObserveCommandOutputUseCase
     private lateinit var observeOptimizationLogEntriesUseCase: ObserveOptimizationLogEntriesUseCase
     private lateinit var observeOptimizationProgressUseCase: ObserveOptimizationProgressUseCase
     private lateinit var observeOptimizationAnalysisUseCase: ObserveOptimizationAnalysisUseCase
@@ -84,9 +79,8 @@ class MainViewModelTest {
         connectAdbUseCase = mockk()
         stopOptimizationUseCase = mockk()
         stopAnalysisUseCase = mockk()
-        getOptimizeAppUseCase = mockk()
+        observeAppOptimizationTypeUseCase = mockk()
         observeAdbConnectionStateUseCase = mockk()
-        observeCommandOutputUseCase = mockk()
         observeOptimizationLogEntriesUseCase = mockk()
         observeOptimizationProgressUseCase = mockk()
         observeOptimizationAnalysisUseCase = mockk()
@@ -96,17 +90,14 @@ class MainViewModelTest {
         navigationManager = mockk(relaxed = true)
         appContext = mockk()
 
-        // Default stub: getString returns a simple string for any resource ID
         every { appContext.getString(any()) } returns "error"
         every { appContext.getString(any(), *anyVararg()) } returns "error"
 
-        // Default stubs for all observation use cases
         every { observeAdbConnectionStateUseCase() } returns connectionStateFlow
-        every { observeCommandOutputUseCase() } returns commandOutputFlow
         every { observeOptimizationLogEntriesUseCase() } returns logEntriesFlow
         every { observeOptimizationProgressUseCase() } returns progressFlow
         every { observeOptimizationAnalysisUseCase() } returns analysisFlow
-        every { getOptimizeAppUseCase() } returns flowOf(Resource.Success(AppOptimizationType.SPEED_PROFILE))
+        every { observeAppOptimizationTypeUseCase() } returns flowOf(Resource.Success(AppOptimizationType.SPEED_PROFILE))
     }
 
     @After
@@ -118,9 +109,8 @@ class MainViewModelTest {
         connectAdbUseCase = connectAdbUseCase,
         stopOptimizationUseCase = stopOptimizationUseCase,
         stopAnalysisUseCase = stopAnalysisUseCase,
-        getOptimizeAppUseCase = getOptimizeAppUseCase,
+        observeAppOptimizationTypeUseCase = observeAppOptimizationTypeUseCase,
         observeAdbConnectionStateUseCase = observeAdbConnectionStateUseCase,
-        observeCommandOutputUseCase = observeCommandOutputUseCase,
         observeOptimizationLogEntriesUseCase = observeOptimizationLogEntriesUseCase,
         observeOptimizationProgressUseCase = observeOptimizationProgressUseCase,
         observeOptimizationAnalysisUseCase = observeOptimizationAnalysisUseCase,
@@ -130,8 +120,6 @@ class MainViewModelTest {
         appContext = appContext,
         navigationManager = navigationManager
     )
-
-    // ── Initial state ─────────────────────────────────────────────────────────
 
     @Test
     fun `given default flows when ViewModel created then uiState data contains disconnected state`() = runTest {
@@ -148,8 +136,6 @@ class MainViewModelTest {
 
         assertEquals(AppOptimizationType.SPEED_PROFILE, vm.uiState.value.data?.optimizationMode)
     }
-
-    // ── Connection state propagation ──────────────────────────────────────────
 
     @Test
     fun `given connection transitions to Connected when observed then uiState reflects Connected`() = runTest {
@@ -172,8 +158,6 @@ class MainViewModelTest {
 
         assertTrue(vm.uiState.value.data?.connectionState is AdbConnectionState.Error)
     }
-
-    // ── OnConnectClicked ──────────────────────────────────────────────────────
 
     @Test
     fun `given OnConnectClicked event when dispatched then calls connectAdbUseCase`() = runTest {
@@ -198,8 +182,6 @@ class MainViewModelTest {
 
         assertEquals(UIStatus.SUCCESS, vm.uiState.value.status)
     }
-
-    // ── OnStartOptimizationClicked ─────────────────────────────────────────────
 
     @Test
     fun `given optimization mode set when OnStartOptimizationClicked then calls startOptimizationUseCase`() = runTest {
@@ -230,8 +212,6 @@ class MainViewModelTest {
         }
     }
 
-    // ── OnStopOptimizationClicked ─────────────────────────────────────────────
-
     @Test
     fun `given OnStopOptimizationClicked event when dispatched then calls stopOptimizationUseCase`() = runTest {
         coEvery { stopOptimizationUseCase() } returns Resource.Success(Unit)
@@ -244,8 +224,6 @@ class MainViewModelTest {
         coVerify(exactly = 1) { stopOptimizationUseCase() }
     }
 
-    // ── OnStopAnalysisClicked ─────────────────────────────────────────────────
-
     @Test
     fun `given OnStopAnalysisClicked event when dispatched then calls stopAnalysisUseCase`() = runTest {
         coEvery { stopAnalysisUseCase() } returns Resource.Success(Unit)
@@ -257,8 +235,6 @@ class MainViewModelTest {
 
         coVerify(exactly = 1) { stopAnalysisUseCase() }
     }
-
-    // ── OnAnalyzeAppsClicked ──────────────────────────────────────────────────
 
     @Test
     fun `given OnAnalyzeAppsClicked when dispatched then calls startAnalysisUseCase with current mode`() = runTest {
@@ -289,10 +265,8 @@ class MainViewModelTest {
         }
     }
 
-    // ── OnDismissOptimizationResultClicked ────────────────────────────────────
-
     @Test
-    fun `given completed run when OnDismissOptimizationResultClicked then dismissedResultRunIds updated`() = runTest {
+    fun `given completed run when OnDismissOptimizationResultClicked then current result is marked dismissed`() = runTest {
         val runId = 42L
         progressFlow.value = OptimizationProgress(
             runId = runId,
@@ -307,7 +281,7 @@ class MainViewModelTest {
         vm.onEvent(MainUiEvent.OnDismissOptimizationResultClicked)
         advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.data?.dismissedResultRunIds?.contains(runId) == true)
+        assertTrue(vm.uiState.value.data?.isCurrentResultDismissed == true)
         coVerify(exactly = 1) { dismissOptimizationResultUseCase() }
     }
 
@@ -323,11 +297,9 @@ class MainViewModelTest {
         coVerify(exactly = 0) { dismissOptimizationResultUseCase() }
     }
 
-    // ── optimizationMode propagation from settings ────────────────────────────
-
     @Test
     fun `given settings emits FULL_OPTIMIZATION when observed then model reflects that mode`() = runTest {
-        every { getOptimizeAppUseCase() } returns flowOf(Resource.Success(AppOptimizationType.FULL_OPTIMIZATION))
+        every { observeAppOptimizationTypeUseCase() } returns flowOf(Resource.Success(AppOptimizationType.FULL_OPTIMIZATION))
         val vm = createViewModel()
         advanceUntilIdle()
 
@@ -336,18 +308,15 @@ class MainViewModelTest {
 
     @Test
     fun `given settings emits error when observed then model keeps previous mode`() = runTest {
-        every { getOptimizeAppUseCase() } returns flowOf(
+        every { observeAppOptimizationTypeUseCase() } returns flowOf(
             Resource.Success(AppOptimizationType.SPEED_PROFILE),
             Resource.Error(ResourceError.DatabaseError("read error"))
         )
         val vm = createViewModel()
         advanceUntilIdle()
 
-        // Should keep the last successful value
         assertEquals(AppOptimizationType.SPEED_PROFILE, vm.uiState.value.data?.optimizationMode)
     }
-
-    // ── isStartingOptimization flag ───────────────────────────────────────────
 
     @Test
     fun `given optimization starts and completes when OnStartOptimizationClicked then isStartingOptimization ends as false`() = runTest {
