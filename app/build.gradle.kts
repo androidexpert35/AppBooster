@@ -1,21 +1,3 @@
-val releaseKeystorePath = providers.gradleProperty("ghReleaseKeystorePath")
-    .orElse(providers.environmentVariable("GH_RELEASE_KEYSTORE_PATH"))
-    .orNull
-val releaseKeyAlias = providers.gradleProperty("ghReleaseKeyAlias")
-    .orElse(providers.environmentVariable("GH_RELEASE_KEY_ALIAS"))
-    .orNull
-val releaseKeyPassword = providers.gradleProperty("ghReleaseKeyPassword")
-    .orElse(providers.environmentVariable("GH_RELEASE_KEY_PASSWORD"))
-    .orNull
-val releaseStorePassword = providers.gradleProperty("ghReleaseStorePassword")
-    .orElse(providers.environmentVariable("GH_RELEASE_STORE_PASSWORD"))
-    .orNull
-val hasReleaseSigning = listOf(
-    releaseKeystorePath,
-    releaseKeyAlias,
-    releaseKeyPassword,
-    releaseStorePassword
-).all { !it.isNullOrBlank() }
 
 plugins {
     alias(libs.plugins.android.application)
@@ -23,6 +5,23 @@ plugins {
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
 }
+
+// ── Release signing (CI-only, resolved from env vars or gradle.properties) ──
+val releaseKeystorePath: String? = providers.gradleProperty("ghReleaseKeystorePath")
+    .orElse(providers.environmentVariable("GH_RELEASE_KEYSTORE_PATH"))
+    .orNull
+val releaseKeyAlias: String? = providers.gradleProperty("ghReleaseKeyAlias")
+    .orElse(providers.environmentVariable("GH_RELEASE_KEY_ALIAS"))
+    .orNull
+val releaseKeyPassword: String? = providers.gradleProperty("ghReleaseKeyPassword")
+    .orElse(providers.environmentVariable("GH_RELEASE_KEY_PASSWORD"))
+    .orNull
+val releaseStorePassword: String? = providers.gradleProperty("ghReleaseStorePassword")
+    .orElse(providers.environmentVariable("GH_RELEASE_STORE_PASSWORD"))
+    .orNull
+val hasReleaseSigning: Boolean = listOf(
+    releaseKeystorePath, releaseKeyAlias, releaseKeyPassword, releaseStorePassword
+).none { it.isNullOrBlank() }
 
 android {
     namespace = "com.tony.appbooster"
