@@ -181,11 +181,11 @@ fun HeroResultPanel(
             }
         }
 
-        // ── Stats row ──────────────────────────────────────────────────────
+        // ── Stats row (Completed and Canceled only) ───────────────────────
         val showStats = when (status) {
-            is HeroCardStatus.Completed  -> status.skippedCount > 0
-            is HeroCardStatus.Canceled   -> status.skippedCount > 0 || status.processedCount > 0
-            is HeroCardStatus.AllOptimized -> status.noProfileCount > 0
+            is HeroCardStatus.Completed    -> status.skippedCount > 0
+            is HeroCardStatus.Canceled     -> status.skippedCount > 0 || status.processedCount > 0
+            is HeroCardStatus.AllOptimized -> false
         }
 
         if (showStats) {
@@ -200,11 +200,7 @@ fun HeroResultPanel(
                         .coerceAtLeast(0),
                     optimizedCount = status.processedCount + status.skippedCount
                 )
-                is HeroCardStatus.AllOptimized -> OptimizationStatsRow(
-                    needsOptimizationCount = 0,
-                    optimizedCount = status.optimizedCount,
-                    noProfileCount = status.noProfileCount
-                )
+                is HeroCardStatus.AllOptimized -> Unit
             }
         }
 
