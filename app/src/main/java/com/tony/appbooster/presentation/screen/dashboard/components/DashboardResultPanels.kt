@@ -183,24 +183,26 @@ fun HeroResultPanel(
 
         // ── Stats row (Completed and Canceled only) ───────────────────────
         val showStats = when (status) {
-            is HeroCardStatus.Completed    -> status.skippedCount > 0
-            is HeroCardStatus.Canceled     -> status.skippedCount > 0 || status.processedCount > 0
+            is HeroCardStatus.Completed    -> status.processedCount > 0 || status.skippedCount > 0
+            is HeroCardStatus.Canceled     -> status.processedCount > 0 || status.skippedCount > 0
             is HeroCardStatus.AllOptimized -> false
         }
 
         if (showStats) {
             Spacer(Modifier.height(16.dp))
-            when (status) {
-                is HeroCardStatus.Completed -> OptimizationStatsRow(
+            if (status is HeroCardStatus.Completed) {
+                OptimizationStatsRow(
                     needsOptimizationCount = 0,
-                    optimizedCount = status.processedCount + status.skippedCount
+                    // processedCount = freshly compiled; skippedCount = already optimal
+                    optimizedCount = status.processedCount,
+                    noProfileCount = status.skippedCount
                 )
-                is HeroCardStatus.Canceled -> OptimizationStatsRow(
+            } else if (status is HeroCardStatus.Canceled) {
+                OptimizationStatsRow(
                     needsOptimizationCount = (status.totalCount - (status.processedCount + status.skippedCount))
                         .coerceAtLeast(0),
                     optimizedCount = status.processedCount + status.skippedCount
                 )
-                is HeroCardStatus.AllOptimized -> Unit
             }
         }
 
@@ -285,7 +287,8 @@ private fun rememberHeroResultConfig(status: HeroCardStatus): HeroResultConfig {
             subtitle = stringResource(
                 R.string.dashboard_result_completed_count,
                 status.processedCount,
-                status.totalCount
+                // denominator = apps actually dealt with, not the original target total
+                status.processedCount + status.skippedCount
             ),
             iconScaleTarget = 1.06f,
             pulseMs = 800,
