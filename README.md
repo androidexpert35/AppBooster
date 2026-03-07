@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/ic_launcher.png" width="192" alt="OptiDroid App Icon"/>
+  <img src="docs/images/logo.png" width="512" alt="OptiDroid App Icon"/>
 </p>
 
 <h1 align="center">OptiDroid</h1>
