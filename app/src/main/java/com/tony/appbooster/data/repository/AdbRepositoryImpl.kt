@@ -731,13 +731,18 @@ class AdbRepositoryImpl @Inject constructor(
 
 
     /**
-     * Queries the compilation status for a single package using multiple approaches:
-     * 1. Check in-memory cache for recently optimized packages
-     * 2. Use `dumpsys package dexopt` to check dexopt status (most reliable)
-     * 3. Fall back to checking compiler filter in package dump
+     * Queries the compilation status for a single package using multiple approaches
+     * in order of reliability and performance cost:
      *
-     * This approach is more reliable than `cmd package compile --check` which
-     * isn't available on all Android versions.
+     * 1. **Session cache** – zero shell calls; reused for packages optimized this session.
+     * 2. **`dumpsys package dexopt`** – single call cached for the entire run; returns the
+     *    exact ART compiler filter for every package → early-return as soon as a match is found.
+     * 3. **`dumpsys package <pkg>`** – per-package fallback, only when the global dexopt dump
+     *    has no entry for this package.
+     * 4. **`cmd package compile --check`** – per-package subprocess, last resort when neither
+     *    dumpsys approach yields a usable filter; returns only a binary yes/no.
+     * 5. **OAT file scan (`ls`)** – absolute last resort to detect presence of compiled
+     *    artifacts when all other approaches fail.
      *
      * @param packageName Package to query.
      * @param targetFilter The optimization filter we intend to apply.
@@ -747,15 +752,16 @@ class AdbRepositoryImpl @Inject constructor(
         packageName: String,
         targetFilter: String
     ): AppCompilationInfo {
-        // First, check if we optimized this package recently in this session
+
+        // ── Step 1: session cache ─────────────────────────────────────────────────
+        // Skip all shell work for packages already optimized this session.
         val cachedOptimizationTime = recentlyOptimizedPackages[packageName]
         if (cachedOptimizationTime != null) {
             val hoursSinceOptimization = (System.currentTimeMillis() - cachedOptimizationTime) / (1000 * 60 * 60)
-            // If optimized within the last 24 hours, skip shell check
             if (hoursSinceOptimization < 24) {
                 return AppCompilationInfo(
                     packageName = packageName,
-                    compilerFilter = targetFilter, // We optimized it with the target filter
+                    compilerFilter = targetFilter,
                     lastCompilationTimeMs = cachedOptimizationTime,
                     lastUpdateTimeMs = null,
                     oatFileExists = true,
@@ -765,139 +771,149 @@ class AdbRepositoryImpl @Inject constructor(
             }
         }
 
-        // --- System truth first: cmd package compile --check ---
-        addLogEntry(LogEntryType.ANALYZING, "System check", packageName = packageName, detail = "cmd package compile --check")
-
-        val checkCommand = "cmd package compile --check $packageName"
-        val checkResult = shellDataSource.executeCommandDetailed(checkCommand)
-
-        val check = checkResult.getOrNull()
-        if (check == null) {
-            // Transport-layer error (exception) - surface it and continue.
-            addLogEntry(LogEntryType.ERROR, "System check failed", packageName = packageName, detail = checkResult.exceptionOrNull()?.message)
-        } else if (!check.isSuccess) {
-            val reason = check.stderr.trim().ifEmpty { "exitCode=${check.exitCode}" }
-            addLogEntry(LogEntryType.INFO, "System check unsupported", packageName = packageName, detail = reason)
-        } else {
-            val checkOutput = check.stdout.trim()
-            DexoptStatusParser.parseCompileCheckNeedsOptimization(checkOutput)?.let { needsOptimizationFromSystem ->
-                addLogEntry(
-                    type = LogEntryType.INFO,
-                    message = "System check result",
-                    packageName = packageName,
-                    detail = if (needsOptimizationFromSystem) "needs optimization" else "already optimal"
-                )
-                return AppCompilationInfo(
-                    packageName = packageName,
-                    compilerFilter = null,
-                    lastCompilationTimeMs = null,
-                    lastUpdateTimeMs = null,
-                    oatFileExists = false,
-                    skipReason = if (needsOptimizationFromSystem) null else AppCompilationInfo.SkipReason.AlreadyOptimal("system-check"),
-                    needsOptimization = needsOptimizationFromSystem
-                )
-            }
-            addLogEntry(LogEntryType.INFO, "System check unparseable", packageName = packageName, detail = checkOutput.take(120))
-        }
-
-        var compilerFilter: String? = null
         var lastUpdateTimeMs: Long? = null
 
-        // --- Fallback #1: dumpsys package dexopt (cached per run) ---
+        // ── Step 2: dumpsys package dexopt (single call, cached for the whole run) ─
+        // Cheapest and most reliable: one shell call amortised across every package,
+        // returning the exact ART compiler filter. Early-return immediately when matched.
         if (cachedDexoptDump == null) {
-            addLogEntry(LogEntryType.ANALYZING, "Fallback: dexopt dump", detail = "dumpsys package dexopt")
+            addLogEntry(LogEntryType.ANALYZING, "Dexopt dump", detail = "dumpsys package dexopt (once per run)")
         } else {
-            addLogEntry(LogEntryType.INFO, "Fallback: dexopt dump", detail = "cache hit")
+            addLogEntry(LogEntryType.INFO, "Dexopt dump", packageName = packageName, detail = "cache hit")
         }
 
         val dexoptDump = cachedDexoptDump ?: run {
             val dexoptResult = shellDataSource.executeCommandDetailed("dumpsys package dexopt")
             val dexopt = dexoptResult.getOrNull()
-
             if (dexopt == null) {
                 addLogEntry(LogEntryType.ERROR, "Dexopt dump failed", detail = dexoptResult.exceptionOrNull()?.message)
-                null
             } else if (!dexopt.isSuccess) {
-                addLogEntry(
-                    LogEntryType.ERROR,
-                    "Dexopt dump failed",
-                    detail = dexopt.stderr.trim().ifEmpty { "exitCode=${dexopt.exitCode}" }
-                )
-                null
-            } else {
-                dexopt.stdout
+                addLogEntry(LogEntryType.ERROR, "Dexopt dump failed",
+                    detail = dexopt.stderr.trim().ifEmpty { "exitCode=${dexopt.exitCode}" })
             }
+            if (dexopt?.isSuccess == true) dexopt.stdout else null
         }.also { cachedDexoptDump = it }
 
         if (dexoptDump != null) {
-            compilerFilter = DexoptStatusParser.parseCompilerFilterFromDexoptDump(packageName = packageName, dump = dexoptDump)
-            if (compilerFilter != null) {
-                addLogEntry(LogEntryType.INFO, "Dexopt status", packageName = packageName, detail = "filter=$compilerFilter")
+            val filter = DexoptStatusParser.parseCompilerFilterFromDexoptDump(packageName = packageName, dump = dexoptDump)
+            if (filter != null) {
+                addLogEntry(LogEntryType.INFO, "Dexopt status", packageName = packageName, detail = "filter=$filter")
+                // Early-return: definitive filter found — no further shell calls needed.
+                return resolveCompilationInfo(packageName, filter, lastUpdateTimeMs, targetFilter)
             }
         }
 
-        // --- Fallback #2: dumpsys package <pkg> parsing (only when needed) ---
-        if (compilerFilter == null) {
-            addLogEntry(LogEntryType.ANALYZING, "Fallback: package dump", packageName = packageName, detail = "dumpsys package")
+        // ── Step 3: dumpsys package <pkg> (per-package fallback) ─────────────────
+        // Reached only when the global dexopt dump has no entry for this package.
+        addLogEntry(LogEntryType.ANALYZING, "Fallback: package dump", packageName = packageName, detail = "dumpsys package")
 
-            val packageDumpCommand = "dumpsys package $packageName"
-            val packageResult = shellDataSource.executeCommand(packageDumpCommand)
+        val packageResult = shellDataSource.executeCommand("dumpsys package $packageName")
+        packageResult.getOrNull()?.let { output ->
+            var filter: String? = null
+            output.lineSequence().forEach { line ->
+                val lower = line.trim().lowercase()
+                when {
+                    filter == null && (lower.contains("status=") || lower.contains("compiler") ||
+                            lower.contains("compilerfilter") || lower.contains("compiler-filter")) ->
+                        filter = DexoptStatusParser.parseCompilerFilterFromLine(lower)
 
-            packageResult.getOrNull()?.let { output ->
-                output.lineSequence().forEach { line ->
-                    val trimmedLower = line.trim().lowercase()
-                    when {
-                        compilerFilter == null && (trimmedLower.contains("status=") || trimmedLower.contains("compiler") || trimmedLower.contains("compilerfilter") || trimmedLower.contains("compiler-filter")) -> {
-                            compilerFilter = DexoptStatusParser.parseCompilerFilterFromLine(trimmedLower)
-                        }
-
-                        trimmedLower.startsWith("lastupdatetime=") && lastUpdateTimeMs == null -> {
-                            val timeStr = line.substringAfter("=").trim()
-                            lastUpdateTimeMs = parseTimestamp(timeStr)
-                        }
+                    lower.startsWith("lastupdatetime=") && lastUpdateTimeMs == null -> {
+                        lastUpdateTimeMs = parseTimestamp(line.substringAfter("=").trim())
                     }
                 }
+            }
+            if (filter != null) {
+                addLogEntry(LogEntryType.INFO, "Dexopt status", packageName = packageName, detail = "filter=$filter")
+                // Early-return: definitive filter found — skip steps 4 and 5.
+                return resolveCompilationInfo(packageName, filter, lastUpdateTimeMs, targetFilter)
+            } else {
+                addLogEntry(LogEntryType.INFO, "Package dump", packageName = packageName, detail = "no compiler filter reported")
+            }
+        } ?: addLogEntry(LogEntryType.ERROR, "Package dump failed", packageName = packageName,
+            detail = packageResult.exceptionOrNull()?.message)
 
-                if (compilerFilter != null) {
-                    addLogEntry(LogEntryType.INFO, "Dexopt status", packageName = packageName, detail = "filter=$compilerFilter")
-                } else {
-                    addLogEntry(LogEntryType.INFO, "Package dump", packageName = packageName, detail = "no compiler filter reported")
+        // ── Step 4: cmd package compile --check (per-package, binary yes/no) ──────
+        // More expensive than dumpsys (spawns a new process per package) and only returns
+        // a boolean — reached only when both dumpsys approaches yielded nothing.
+        addLogEntry(LogEntryType.ANALYZING, "Fallback: compile check", packageName = packageName,
+            detail = "cmd package compile --check")
+
+        val checkResult = shellDataSource.executeCommandDetailed("cmd package compile --check $packageName")
+        val check = checkResult.getOrNull()
+        when {
+            check == null ->
+                addLogEntry(LogEntryType.ERROR, "Compile check failed", packageName = packageName,
+                    detail = checkResult.exceptionOrNull()?.message)
+            !check.isSuccess ->
+                addLogEntry(LogEntryType.INFO, "Compile check unsupported", packageName = packageName,
+                    detail = check.stderr.trim().ifEmpty { "exitCode=${check.exitCode}" })
+            else -> {
+                val checkOutput = check.stdout.trim()
+                DexoptStatusParser.parseCompileCheckNeedsOptimization(checkOutput)?.let { needsOpt ->
+                    addLogEntry(LogEntryType.INFO, "Compile check result", packageName = packageName,
+                        detail = if (needsOpt) "needs optimization" else "already optimal")
+                    return AppCompilationInfo(
+                        packageName = packageName,
+                        compilerFilter = null,
+                        lastCompilationTimeMs = null,
+                        lastUpdateTimeMs = lastUpdateTimeMs,
+                        oatFileExists = false,
+                        skipReason = if (needsOpt) null else AppCompilationInfo.SkipReason.AlreadyOptimal("system-check"),
+                        needsOptimization = needsOpt
+                    )
                 }
-            } ?: run {
-                addLogEntry(LogEntryType.ERROR, "Package dump failed", packageName = packageName, detail = packageResult.exceptionOrNull()?.message)
+                addLogEntry(LogEntryType.INFO, "Compile check unparseable", packageName = packageName,
+                    detail = checkOutput.take(120))
             }
         }
 
-        // --- Fallback #3: oat file heuristic ---
-        if (compilerFilter == null) {
-            addLogEntry(LogEntryType.ANALYZING, "Fallback: oat scan", packageName = packageName, detail = "ls /data/app/.../oat")
-            val oatCheckCommand =
-                "ls /data/app/*$packageName*/oat/arm64/*.odex || ls /data/app/*$packageName*/oat/arm/*.odex"
-            val oatResult = shellDataSource.executeCommand(oatCheckCommand)
-
-            oatResult.getOrNull()?.let { output ->
-                if (
-                    output.trim().isNotEmpty() &&
-                    !output.contains("No such file", ignoreCase = true) &&
-                    !output.contains("Permission denied", ignoreCase = true)
-                ) {
-                    compilerFilter = "unknown-optimized"
-                    addLogEntry(LogEntryType.INFO, "OAT files found", packageName = packageName)
-                } else {
-                    addLogEntry(LogEntryType.INFO, "OAT files not accessible", packageName = packageName)
-                }
-            } ?: run {
-                addLogEntry(LogEntryType.ERROR, "OAT scan failed", packageName = packageName, detail = oatResult.exceptionOrNull()?.message)
+        // ── Step 5: OAT file scan (absolute last resort) ──────────────────────────
+        addLogEntry(LogEntryType.ANALYZING, "Fallback: oat scan", packageName = packageName,
+            detail = "ls /data/app/.../oat")
+        val oatResult = shellDataSource.executeCommand(
+            "ls /data/app/*$packageName*/oat/arm64/*.odex || ls /data/app/*$packageName*/oat/arm/*.odex"
+        )
+        var oatFilter: String? = null
+        oatResult.getOrNull()?.let { output ->
+            if (output.trim().isNotEmpty() &&
+                !output.contains("No such file", ignoreCase = true) &&
+                !output.contains("Permission denied", ignoreCase = true)
+            ) {
+                oatFilter = "unknown-optimized"
+                addLogEntry(LogEntryType.INFO, "OAT files found", packageName = packageName)
+            } else {
+                addLogEntry(LogEntryType.INFO, "OAT files not accessible", packageName = packageName)
             }
-        }
+        } ?: addLogEntry(LogEntryType.ERROR, "OAT scan failed", packageName = packageName,
+            detail = oatResult.exceptionOrNull()?.message)
 
-        // Decision logic:
+        return resolveCompilationInfo(packageName, oatFilter, lastUpdateTimeMs, targetFilter)
+    }
+
+    /**
+     * Applies the decision logic that maps a resolved [compilerFilter] (or null) to
+     * [AppCompilationInfo.needsOptimization] and [AppCompilationInfo.skipReason].
+     *
+     * Extracted so that each fallback step can early-return as soon as a compiler filter
+     * is known, without duplicating the branching logic.
+     *
+     * @param packageName Package being evaluated.
+     * @param compilerFilter The compiler filter resolved by any fallback step, or null.
+     * @param lastUpdateTimeMs App's last-update timestamp, if available.
+     * @param targetFilter The optimization filter we intend to apply.
+     * @return Fully resolved [AppCompilationInfo].
+     */
+    private suspend fun resolveCompilationInfo(
+        packageName: String,
+        compilerFilter: String?,
+        lastUpdateTimeMs: Long?,
+        targetFilter: String
+    ): AppCompilationInfo {
         val needsOptimization: Boolean
         val skipReason: AppCompilationInfo.SkipReason?
 
-        val filter = compilerFilter
         when {
-            filter == null -> {
+            compilerFilter == null -> {
                 needsOptimization = true
                 skipReason = null
             }
@@ -905,44 +921,47 @@ class AdbRepositoryImpl @Inject constructor(
             // "verify" means no runtime profile exists — the user has never opened the app.
             // Profile-guided compilation (speed-profile) is pointless without a profile.
             // For full (speed) mode, we still compile since it doesn't rely on profiles.
-            filter == "verify" && targetFilter.lowercase() == "speed-profile" -> {
+            compilerFilter == "verify" && targetFilter.lowercase() == "speed-profile" -> {
                 needsOptimization = false
-                skipReason = AppCompilationInfo.SkipReason.NoProfile(filter)
+                skipReason = AppCompilationInfo.SkipReason.NoProfile(compilerFilter)
             }
 
-            // Some Android builds only list certain packages (often overlays/RRO) in the Dexopt state section
-            // without providing any compiler filter details. These are typically resource-only packages with
-            // no meaningful dex compilation target.
-            //
-            // IMPORTANT: we only skip when we have strong signals this is an overlay/RRO. Otherwise we keep
-            // treating it as needing optimization so we don't hide real system apps.
-            filter == "unknown-present" -> {
-                val pkg = packageName
-                val dump = cachedPackageDumps[pkg] ?: run {
-                    val dumpResult = shellDataSource.executeCommand("dumpsys package $pkg")
-                    dumpResult.getOrNull()?.also { cachedPackageDumps[pkg] = it }
+            // Some Android builds list overlay/RRO packages in the Dexopt state section
+            // without providing any compiler filter details. Only skip when we can confirm
+            // it is an overlay — otherwise keep it eligible to avoid hiding real system apps.
+            compilerFilter == "unknown-present" -> {
+                val dump = cachedPackageDumps[packageName] ?: run {
+                    shellDataSource.executeCommand("dumpsys package $packageName")
+                        .getOrNull()?.also { cachedPackageDumps[packageName] = it }
                 }
-                val isOverlayLike = PackageClassifier.isOverlayLike(packageName = pkg, dumpsysPackageOutput = dump)
-
+                val isOverlayLike = PackageClassifier.isOverlayLike(
+                    packageName = packageName, dumpsysPackageOutput = dump
+                )
                 if (isOverlayLike) {
                     needsOptimization = false
                     skipReason = AppCompilationInfo.SkipReason.AlreadyOptimal("overlay/rro")
-                    addLogEntry(LogEntryType.INFO, "Overlay classification", packageName = pkg, detail = "Confirmed as overlay/RRO")
+                    addLogEntry(LogEntryType.INFO, "Overlay classification",
+                        packageName = packageName, detail = "Confirmed as overlay/RRO")
                 } else {
                     needsOptimization = true
                     skipReason = null
-                    addLogEntry(LogEntryType.INFO, "Overlay classification", packageName = pkg, detail = "Not an overlay → keep eligible")
+                    addLogEntry(LogEntryType.INFO, "Overlay classification",
+                        packageName = packageName, detail = "Not an overlay → keep eligible")
                 }
             }
 
-            filter == "unknown-optimized" -> {
+            // OAT files exist but exact filter is unreadable.
+            // Assume optimized for speed; for speed-profile re-compile conservatively since
+            // we can't confirm the profile was actually used.
+            compilerFilter == "unknown-optimized" -> {
                 needsOptimization = targetFilter.lowercase() == "speed-profile"
-                skipReason = if (needsOptimization) null else AppCompilationInfo.SkipReason.RecentlyOptimized(0, "compiled")
+                skipReason = if (needsOptimization) null
+                             else AppCompilationInfo.SkipReason.RecentlyOptimized(0, "compiled")
             }
 
-            isFilterOptimalForTarget(filter, targetFilter) -> {
+            isFilterOptimalForTarget(compilerFilter, targetFilter) -> {
                 needsOptimization = false
-                skipReason = AppCompilationInfo.SkipReason.RecentlyOptimized(0, filter)
+                skipReason = AppCompilationInfo.SkipReason.RecentlyOptimized(0, compilerFilter)
             }
 
             else -> {
