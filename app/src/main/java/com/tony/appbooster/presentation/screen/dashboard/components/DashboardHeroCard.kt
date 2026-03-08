@@ -273,8 +273,8 @@ private fun ReadyContent(
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "heroIdle")
     val iconOffset by infiniteTransition.animateFloat(
-        initialValue = -3f,
-        targetValue = 3f,
+        initialValue = -2f,
+        targetValue = 2f,
         animationSpec = infiniteRepeatable(
             animation = tween(2000, easing = androidx.compose.animation.core.EaseInOutCubic),
             repeatMode = RepeatMode.Reverse
@@ -298,31 +298,35 @@ private fun ReadyContent(
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
     ) {
+        // ── Top row: mode icon + text left, play button right ────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // Mode icon
             Surface(
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(44.dp)
                     .graphicsLayer { translationY = iconOffset },
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primaryContainer,
-                tonalElevation = 4.dp
+                tonalElevation = 2.dp
             ) {
                 androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        modifier = Modifier.size(32.dp),
+                        modifier = Modifier.size(22.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
 
+            Spacer(Modifier.width(12.dp))
+
+            // Title & description – takes available space
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
@@ -337,89 +341,75 @@ private fun ReadyContent(
                 )
             }
 
+            Spacer(Modifier.width(12.dp))
+
+            // Circular play / loading button
             FilledTonalButton(
                 onClick = onStartOptimization,
                 enabled = !isStarting,
-                shape = RoundedCornerShape(16.dp),
+                shape = CircleShape,
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                     disabledContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+                contentPadding = PaddingValues(14.dp),
+                modifier = Modifier.size(52.dp)
             ) {
                 if (isStarting) {
                     androidx.compose.material3.CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.5.dp,
                         color = MaterialTheme.colorScheme.onPrimary
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = stringResource(R.string.action_start),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Rounded.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = stringResource(R.string.action_start),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
+                        contentDescription = stringResource(R.string.action_start),
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
         }
 
+        // ── Compact analysis section ─────────────────────────────────────
         when {
             analysis.hasScanned -> {
-                    OptimizationStatsRow(
-                        needsOptimizationCount = analysis.appsNeedingOptimization,
-                        optimizedCount = analysis.appsAlreadyOptimized,
-                        noProfileCount = analysis.appsWithNoProfile,
-                        showNoProfile = optimizationMode == AppOptimizationType.SPEED_PROFILE
-                    )
-                }
+                OptimizationStatsRow(
+                    needsOptimizationCount = analysis.appsNeedingOptimization,
+                    optimizedCount = analysis.appsAlreadyOptimized,
+                    noProfileCount = analysis.appsWithNoProfile,
+                    showNoProfile = optimizationMode == AppOptimizationType.SPEED_PROFILE
+                )
+            }
 
             else -> {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable(onClick = onAnalyze),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh
                 ) {
                     Row(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Speed,
                             contentDescription = null,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.analysis_scanning_title),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = stringResource(R.string.analysis_tap_to_scan),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        Text(
+                            text = stringResource(R.string.analysis_tap_to_scan),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }

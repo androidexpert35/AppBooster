@@ -14,9 +14,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.StopCircle
+import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -56,15 +57,30 @@ internal fun ProcessProgressContent(
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // ── Header: title + percentage badge ──────────────────────────────
+        // ── Header: title + subtitle left, stop button right ────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            // Percentage badge
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Text(
+                    text = "${(animatedProgress * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = state.title,
                     style = MaterialTheme.typography.titleMedium,
@@ -78,33 +94,39 @@ internal fun ProcessProgressContent(
                 )
             }
 
+            Spacer(Modifier.width(12.dp))
+
+            // Circular stop button – mirrors the ReadyContent play button
             Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
+                onClick = onStop,
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.errorContainer,
+                modifier = Modifier.size(44.dp)
             ) {
-                Text(
-                    text = "${(animatedProgress * 100).toInt()}%",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.Stop,
+                        contentDescription = stringResource(R.string.dashboard_stop_optimization_cd),
+                        modifier = Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
             }
         }
 
-        // ── Progress bar ──────────────────────────────────────────────────
+        // ── Progress bar ────────────────────────────────────────────────
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp))
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(animatedProgress.coerceIn(0f, 1f))
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
                     .background(
                         Brush.horizontalGradient(
                             colors = listOf(
@@ -116,61 +138,37 @@ internal fun ProcessProgressContent(
             )
         }
 
-        // ── Current package chip ──────────────────────────────────────────
+        // ── Current package chip ────────────────────────────────────────
         if (state.currentPackage.isNotEmpty()) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(10.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
                         text = state.currentPackage
                             .substringAfterLast(".")
                             .replaceFirstChar { it.uppercase() },
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = state.currentPackage,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
                 }
-            }
-        }
-
-
-        // ── Stop button ───────────────────────────────────────────────────
-        Surface(
-            onClick = onStop,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.errorContainer,
-            tonalElevation = 2.dp
-        ) {
-            Row(
-                modifier = Modifier.padding(vertical = 14.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.StopCircle,
-                    contentDescription = stringResource(R.string.dashboard_stop_optimization_cd),
-                    modifier = Modifier.size(22.dp),
-                    tint = MaterialTheme.colorScheme.onErrorContainer
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = stringResource(R.string.action_stop),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
             }
         }
     }
