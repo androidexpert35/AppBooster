@@ -203,6 +203,7 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_BODY: ${{ steps.changelog.outputs.body }}
         run: |
           tag="v${{ needs.signed-release.outputs.version_name }}-${{ needs.signed-release.outputs.version_code }}"
 
@@ -211,7 +212,7 @@ jobs:
 
           gh release create "$tag" \
             --title "Release ${{ needs.signed-release.outputs.version_name }} (${{ needs.signed-release.outputs.version_code }})" \
-            --notes "${{ steps.changelog.outputs.body }}" \
+            --notes "$RELEASE_BODY" \
             --target "${{ github.sha }}" \
             $files
 
