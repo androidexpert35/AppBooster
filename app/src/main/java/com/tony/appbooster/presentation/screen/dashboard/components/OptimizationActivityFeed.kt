@@ -74,12 +74,20 @@ import java.util.Locale
  * @param modifier Modifier for layout customization.
  * @param isExpanded When true the feed fills all available vertical space; otherwise
  *   it is constrained to a fixed 200 dp height.
+ * @param fillHeight When true the inner [LazyColumn] uses [Modifier.weight] to grow
+ *   into all remaining vertical space instead of being capped at a fixed max height.
+ *   Pass `true` in the tablet two-pane layout where the card already fills the full
+ *   pane height and no external scroll container exists.
+ * @param applyInternalPadding When true (default) applies 20 dp horizontal padding
+ *   around the card. Pass `false` when the caller manages its own padding.
  */
 @Composable
 fun OptimizationActivityFeed(
     entries: List<OptimizationLogEntry>,
     modifier: Modifier = Modifier,
     isExpanded: Boolean = false,
+    fillHeight: Boolean = false,
+    applyInternalPadding: Boolean = true,
 ) {
     val listState = rememberLazyListState()
 
@@ -93,7 +101,7 @@ fun OptimizationActivityFeed(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
+            .then(if (applyInternalPadding) Modifier.padding(horizontal = 20.dp) else Modifier),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -102,7 +110,7 @@ fun OptimizationActivityFeed(
         Column(
             modifier = Modifier
                 .padding(16.dp)
-                .then(if (isExpanded) Modifier.fillMaxSize() else Modifier)
+                .then(if (isExpanded || fillHeight) Modifier.fillMaxSize() else Modifier)
         ) {
             // Header row
             Row(
@@ -126,11 +134,19 @@ fun OptimizationActivityFeed(
             Spacer(Modifier.height(12.dp))
 
             if (entries.isEmpty()) {
-                EmptyFeedState(isExpanded = isExpanded)
+                EmptyFeedState(isExpanded = isExpanded || fillHeight)
             } else {
+                // fillHeight: grow into all remaining space (tablet full-height pane).
+                // isExpanded (non-fill): cap at 400 dp so phone layout doesn't overflow.
+                // default: fixed 200 dp collapsed view.
+                val listModifier = when {
+                    fillHeight -> Modifier.weight(1f)
+                    isExpanded -> Modifier.heightIn(max = 400.dp)
+                    else -> Modifier.height(200.dp)
+                }
                 LazyColumn(
                     state = listState,
-                    modifier = if (isExpanded) Modifier.heightIn(max = 400.dp) else Modifier.height(200.dp),
+                    modifier = listModifier,
                     contentPadding = PaddingValues(vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {

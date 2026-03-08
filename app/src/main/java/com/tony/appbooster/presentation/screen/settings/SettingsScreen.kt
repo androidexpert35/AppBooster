@@ -3,7 +3,9 @@ package com.tony.appbooster.presentation.screen.settings
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -15,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -33,6 +36,7 @@ import com.tony.appbooster.presentation.screen.settings.components.AboutCard
 import com.tony.appbooster.presentation.screen.settings.components.OptimizationTypeSelector
 import com.tony.appbooster.presentation.screen.settings.components.SettingsSection
 import com.tony.appbooster.presentation.screen.settings.components.ShizukuStatusCard
+import com.tony.appbooster.presentation.tools.isTabletLayout
 import com.tony.appbooster.presentation.viewmodel.base.UIState
 import com.tony.appbooster.presentation.viewmodel.base.UIStatus
 import com.tony.appbooster.presentation.viewmodel.settings.SettingsUiState
@@ -69,6 +73,9 @@ fun SettingsScreen(
  * [SettingsUiState], allowing the user to inspect and change optimization
  * mode as well as view the current Shizuku status and app information.
  *
+ * Automatically switches between a single-column phone layout and a
+ * two-column tablet layout based on the current [LocalWindowSizeClass].
+ *
  * @param data The current UI state snapshot for the Settings screen.
  * @param onOptimizationTypeClick Callback invoked when user requests a new optimization type.
  */
@@ -78,6 +85,7 @@ fun SettingsScreenContent(
     data: SettingsUiState,
     onOptimizationTypeClick: (AppOptimizationType) -> Unit
 ) {
+    val isTablet = isTabletLayout()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
@@ -101,15 +109,95 @@ fun SettingsScreenContent(
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
+        if (isTablet) {
+            SettingsTabletLayout(
+                data = data,
+                onOptimizationTypeClick = onOptimizationTypeClick,
+                modifier = Modifier.padding(padding)
+            )
+        } else {
+            SettingsPhoneLayout(
+                data = data,
+                onOptimizationTypeClick = onOptimizationTypeClick,
+                modifier = Modifier.padding(padding)
+            )
+        }
+    }
+}
+
+/**
+ * Single-column phone layout: all settings sections stacked vertically with scroll.
+ */
+@Composable
+private fun SettingsPhoneLayout(
+    data: SettingsUiState,
+    onOptimizationTypeClick: (AppOptimizationType) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        SettingsSection(
+            title = stringResource(R.string.settings_section_optimization_title),
+            subtitle = stringResource(R.string.settings_section_optimization_subtitle)
+        ) {
+            OptimizationTypeSelector(
+                selectedType = data.appOptimizationType,
+                onTypeSelected = onOptimizationTypeClick
+            )
+        }
+
+        SettingsSection(
+            title = stringResource(R.string.settings_section_shizuku_title),
+            subtitle = stringResource(R.string.settings_section_shizuku_subtitle)
+        ) {
+            ShizukuStatusCard(shizukuState = data.shizukuState)
+        }
+
+        SettingsSection(
+            title = stringResource(R.string.settings_section_about_title),
+            subtitle = stringResource(R.string.settings_section_about_subtitle)
+        ) {
+            AboutCard(
+                versionName = data.appVersionName,
+                versionChannel = data.appVersionChannel
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+/**
+ * Two-column tablet layout: Optimization mode on the left column (60%),
+ * Shizuku status and About stacked on the right column (40%).
+ *
+ * Both columns scroll independently so content is never clipped regardless
+ * of font scale or screen density.
+ */
+@Composable
+private fun SettingsTabletLayout(
+    data: SettingsUiState,
+    onOptimizationTypeClick: (AppOptimizationType) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(0.dp)
+    ) {
+        // ── Left column: Optimization mode ─────────────────────────────────
         Column(
             modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
+                .weight(0.55f)
+                .fillMaxHeight()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .padding(start = 24.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Optimization Mode Section
             SettingsSection(
                 title = stringResource(R.string.settings_section_optimization_title),
                 subtitle = stringResource(R.string.settings_section_optimization_subtitle)
@@ -119,8 +207,26 @@ fun SettingsScreenContent(
                     onTypeSelected = onOptimizationTypeClick
                 )
             }
+            Spacer(Modifier.height(8.dp))
+        }
 
-            // Shizuku Status Section
+        VerticalDivider(
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(vertical = 16.dp),
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+
+        // ── Right column: Shizuku status + About ────────────────────────────
+        Column(
+            modifier = Modifier
+                .weight(0.45f)
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 24.dp, top = 16.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
             SettingsSection(
                 title = stringResource(R.string.settings_section_shizuku_title),
                 subtitle = stringResource(R.string.settings_section_shizuku_subtitle)
@@ -128,7 +234,6 @@ fun SettingsScreenContent(
                 ShizukuStatusCard(shizukuState = data.shizukuState)
             }
 
-            // About Section
             SettingsSection(
                 title = stringResource(R.string.settings_section_about_title),
                 subtitle = stringResource(R.string.settings_section_about_subtitle)
@@ -138,9 +243,7 @@ fun SettingsScreenContent(
                     versionChannel = data.appVersionChannel
                 )
             }
-
-            // Bottom spacing
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
@@ -196,3 +299,4 @@ fun SettingsScreenContentDarkPreview() {
         )
     }
 }
+
