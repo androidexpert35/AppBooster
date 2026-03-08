@@ -182,6 +182,10 @@
 
     <string name="about_app_title">OptiDroid</string>
     <string name="about_version_fallback">1.0.0</string>
+    <string name="about_open_source_title">Open Source</string>
+    <string name="about_open_source_description">View the source code on GitHub</string>
+    <string name="about_open_source_url">https://github.com/androidexpert35/AppBooster?tab=readme-ov-file</string>
+    <string name="about_open_source_cd">Open source repository on GitHub</string>
 
     <!-- Preview-only strings (used in @Preview composables) -->
     <string name="base_dialog_preview_title">Connection Failed</string>

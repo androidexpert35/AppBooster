@@ -658,6 +658,7 @@ fun `given data updates when observing then emits all values`() = runTest {
 | Mutable public state | Immutable + copy() |
 | Field injection | Constructor injection |
 | Static state snaps | Animated transitions |
+| `LazyColumn` for static/fixed content | `Column + verticalScroll()` |
 
 ---
 
@@ -733,3 +734,49 @@ fun HeroResultPanel(
 - ✅ Visual token resolution is delegated to a private `*Config` data class resolved via `remember*Config(status)`
 - ✅ The `when(status)` branch lives in the config resolver, not scattered across the composable body
 - ❌ Do not maintain separate `CompletedContent`, `CanceledContent`, `AllOptimizedContent` composables that are structurally identical
+
+---
+
+## 12. Scrollable Layout Choice
+
+### Rule: Never use `LazyColumn` for static, fixed-count content
+
+`LazyColumn` is **only** for dynamic lists with an unknown or large number of items.
+It carries subcomposition overhead (item boundary tracking, layout node recycling, subcompose passes)
+that is pure waste when every item is always visible and known at compile time.
+
+| Screen type | Correct approach |
+|-------------|-----------------|
+| Dynamic list – unknown / large item count (e.g. app list, log feed) | `LazyColumn` with stable `key = { item.id }` |
+| Static screen – small fixed number of sections (e.g. Settings, About) | `Column + verticalScroll(rememberScrollState())` |
+
+```kotlin
+// ❌ Wrong – LazyColumn wrapping a handful of fixed, always-visible sections
+LazyColumn {
+    item { SettingsSection(...) }
+    item { ShizukuStatusCard(...) }
+    item { AboutCard(...) }
+}
+
+// ✅ Correct – plain Column with scroll modifier
+Column(
+    modifier = Modifier
+        .fillMaxSize()
+        .verticalScroll(rememberScrollState())
+        .padding(horizontal = 20.dp, vertical = 8.dp),
+    verticalArrangement = Arrangement.spacedBy(20.dp)
+) {
+    SettingsSection(...)
+    ShizukuStatusCard(...)
+    AboutCard(...)
+}
+```
+
+### Decision checklist
+
+- **Is the item count bounded and small (< ~10)?** → `Column + verticalScroll()`
+- **Is the list driven by a runtime collection of unknown size?** → `LazyColumn`
+- **Is the content always fully composed regardless of scroll position?** → `Column + verticalScroll()`
+- **Do items need to be recycled / virtualised to avoid OOM?** → `LazyColumn`
+
+

@@ -136,6 +136,10 @@
 
     <string name="about_app_title">OptiDroid</string>
     <string name="about_version_fallback">1.0.0</string>
+    <string name="about_open_source_title">Open Source</string>
+    <string name="about_open_source_description">Visualizza il codice sorgente su GitHub</string>
+    <string name="about_open_source_url">https://github.com/androidexpert35/AppBooster?tab=readme-ov-file</string>
+    <string name="about_open_source_cd">Repository open source su GitHub</string>
 
     <string name="base_dialog_preview_title">Connessione non riuscita</string>
     <string name="base_dialog_preview_message">Impossibile connettersi al server. Controlla la connessione Internet e riprova.</string>
