@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,13 +20,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DoNotDisturbOn
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RocketLaunch
 import androidx.compose.material.icons.rounded.Speed
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -102,76 +102,91 @@ fun HeroResultPanel(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // ── Icon badge ─────────────────────────────────────────────────────
-        Box(contentAlignment = Alignment.Center) {
-            // Glow halo – only visible for AllOptimized
-            if (config.showGlow) {
+        // ── Top row: icon + text + dismiss ───────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Animated icon badge with optional glow
+            Box(contentAlignment = Alignment.Center) {
+                if (config.showGlow) {
+                    Surface(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .scale(iconScale)
+                            .alpha(glowAlpha),
+                        shape = CircleShape,
+                        color = config.glowColor
+                    ) {}
+                }
+
                 Surface(
                     modifier = Modifier
-                        .size(88.dp)
-                        .scale(iconScale)
-                        .alpha(glowAlpha),
+                        .size(44.dp)
+                        .scale(iconScale),
                     shape = CircleShape,
-                    color = config.glowColor
-                ) {}
+                    color = config.containerColor,
+                    tonalElevation = if (config.showGlow) 6.dp else 4.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = config.icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = config.iconTint
+                        )
+                    }
+                }
             }
 
-            Surface(
-                modifier = Modifier
-                    .size(if (config.showGlow) 72.dp else 72.dp)
-                    .scale(iconScale),
-                shape = CircleShape,
-                color = config.containerColor,
-                tonalElevation = if (config.showGlow) 6.dp else 4.dp
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = config.icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(if (config.showGlow) 42.dp else 38.dp),
-                        tint = config.iconTint
-                    )
-                }
+            Spacer(Modifier.width(12.dp))
+
+            // Title & subtitle
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = config.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = config.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            // Dismiss button
+            IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = stringResource(R.string.action_dismiss),
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
-        Spacer(Modifier.height(if (config.showGlow) 20.dp else 16.dp))
-
-        // ── Title ──────────────────────────────────────────────────────────
-        Text(
-            text = config.title,
-            style = if (config.showGlow) MaterialTheme.typography.headlineSmall
-                    else MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        // ── Subtitle / count ───────────────────────────────────────────────
-        Text(
-            text = config.subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = if (config.showGlow) 16.dp else 0.dp)
-        )
-
-        // ── Tertiary chip – AllOptimized only ──────────────────────────────
+        // ── Tertiary chip – AllOptimized only ────────────────────────────
         if (config.showGlow) {
             val allOptimized = status as HeroCardStatus.AllOptimized
             Surface(
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(14.dp),
                 color = MaterialTheme.colorScheme.tertiaryContainer
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Speed,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                     Text(
@@ -179,7 +194,7 @@ fun HeroResultPanel(
                             R.string.analysis_apps_already_optimized,
                             allOptimized.optimizedCount
                         ),
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
@@ -187,20 +202,18 @@ fun HeroResultPanel(
             }
         }
 
-        // ── Stats row (Completed and Canceled only) ───────────────────────
+        // ── Stats row (Completed and Canceled only) ─────────────────────
         val showStats = when (status) {
-            is HeroCardStatus.Completed    -> status.processedCount > 0 || status.skippedCount > 0
-            is HeroCardStatus.Canceled     -> status.processedCount > 0 || status.skippedCount > 0
+            is HeroCardStatus.Completed -> status.processedCount > 0 || status.skippedCount > 0
+            is HeroCardStatus.Canceled -> status.processedCount > 0 || status.skippedCount > 0
             is HeroCardStatus.AllOptimized -> false
         }
 
         if (showStats) {
-            Spacer(Modifier.height(16.dp))
             val isSpeedProfile = status.optimizationMode == AppOptimizationType.SPEED_PROFILE
             if (status is HeroCardStatus.Completed) {
                 OptimizationStatsRow(
                     needsOptimizationCount = 0,
-                    // processedCount = freshly compiled; skippedCount - noProfileCount = already optimal
                     optimizedCount = status.processedCount + (status.skippedCount - status.noProfileCount).coerceAtLeast(0),
                     noProfileCount = status.noProfileCount,
                     showNoProfile = isSpeedProfile
@@ -216,112 +229,74 @@ fun HeroResultPanel(
             }
         }
 
-        Spacer(Modifier.height(18.dp))
-
-        // ── Action buttons ─────────────────────────────────────────────────
-        when {
-            // AllOptimized: Force re-optimize is the main CTA
-            config.showGlow -> {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.analysis_all_optimized_force_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        // ── Action buttons ───────────────────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            when {
+                // AllOptimized: force re-optimize is the main CTA
+                config.showGlow -> {
+                    FilledTonalButton(
+                        onClick = onForceOptimize,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            horizontal = 16.dp, vertical = 10.dp
+                        )
                     ) {
-                        FilledTonalButton(
-                            onClick = onForceOptimize,
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.RocketLaunch,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = stringResource(R.string.action_force_optimize_short),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                        TextButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.align(Alignment.CenterVertically)
-                        ) {
-                            Text(stringResource(R.string.action_dismiss))
-                        }
+                        Icon(
+                            imageVector = Icons.Rounded.RocketLaunch,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.action_force_optimize_short),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                 }
-            }
 
-            // Completed/Canceled: Run again is primary, force is a subtle link
-            config.showRunAgain -> {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                // Completed/Canceled: run again + force optimize
+                config.showRunAgain -> {
+                    FilledTonalButton(
+                        onClick = onRunAgain,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            horizontal = 16.dp, vertical = 10.dp
+                        )
                     ) {
-                        FilledTonalButton(
-                            onClick = onRunAgain,
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.action_run_again))
-                        }
-                        TextButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.align(Alignment.CenterVertically)
-                        ) {
-                            Text(stringResource(R.string.action_dismiss))
-                        }
+                        Icon(
+                            imageVector = Icons.Rounded.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.action_run_again),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
 
                     TextButton(onClick = onForceOptimize) {
                         Icon(
                             imageVector = Icons.Rounded.RocketLaunch,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.tertiary
                         )
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(4.dp))
                         Text(
-                            text = stringResource(R.string.action_force_optimize),
-                            style = MaterialTheme.typography.labelMedium,
+                            text = stringResource(R.string.action_force_optimize_short),
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.tertiary
                         )
                     }
-                }
-            }
-
-            // Fallback: dismiss only
-            else -> {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.action_dismiss))
                 }
             }
         }
