@@ -1,4 +1,4 @@
-package com.tony.appbooster.data.repository
+package com.tony.appbooster.data.util
 
 /**
  * Parses ART/dexopt related command outputs into normalized compiler filter signals.
@@ -100,3 +100,4 @@ internal object DexoptStatusParser {
         }
     }
 }
+

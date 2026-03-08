@@ -3,10 +3,10 @@ package com.tony.appbooster.data.repository
 
 import android.content.Context
 import android.content.pm.PackageManager
+import com.tony.appbooster.domain.model.common.AppInfo
 import com.tony.appbooster.domain.model.common.Resource
 import com.tony.appbooster.domain.model.common.ResourceError
 import com.tony.appbooster.domain.repository.AppInfoRepository
-import com.tony.appbooster.presentation.screen.settings.model.AppInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,12 +20,8 @@ import javax.inject.Singleton
  * while providing the current version name and code for display in Settings
  * or about screens.
  *
- * @param applicationContext Application-level [Context] used to access
- * Android package metadata.
- * @return A concrete implementation of [AppInfoRepository] that maps
- * framework-specific failures into domain-level [ResourceError] types.
- * @throws IllegalStateException If the application package information cannot
- * be retrieved due to an unexpected runtime state.
+ * @property applicationContext Application-level [Context] used to access
+ *           Android package metadata.
  */
 @Singleton
 class AppInfoRepositoryImpl @Inject constructor(

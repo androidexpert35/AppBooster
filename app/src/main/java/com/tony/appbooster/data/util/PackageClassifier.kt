@@ -1,4 +1,4 @@
-package com.tony.appbooster.data.repository
+package com.tony.appbooster.data.util
 
 /**
  * Classifies packages using `dumpsys package <pkg>` output.
@@ -52,3 +52,4 @@ internal object PackageClassifier {
         return hasOverlayTarget || hasOverlayPath || nameSuggestsOverlay
     }
 }
+

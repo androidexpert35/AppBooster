@@ -1,4 +1,4 @@
-package com.tony.appbooster.data.repository
+package com.tony.appbooster.data.util
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

@@ -1,7 +1,7 @@
 package com.tony.appbooster.domain.repository
 
+import com.tony.appbooster.domain.model.common.AppInfo
 import com.tony.appbooster.domain.model.common.Resource
-import com.tony.appbooster.presentation.screen.settings.model.AppInfo
 
 /**
  * Repository abstraction providing app metadata required by the domain

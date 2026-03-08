@@ -1,4 +1,4 @@
-package com.tony.appbooster.data.repository
+package com.tony.appbooster.data.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -6,10 +6,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Unit tests for parsing utilities inside [AdbRepositoryImpl].
+ * Unit tests for [DexoptStatusParser] and [PackageClassifier] parsing utilities.
  *
- * Note: This uses reflection to access private parsing helpers. We keep it lightweight
- * because production correctness here is critical across many Android versions.
+ * Production correctness here is critical across many Android versions.
  */
 class AdbRepositoryImplParsingTest {
 
@@ -119,3 +118,4 @@ class AdbRepositoryImplParsingTest {
         assertFalse(PackageClassifier.isOverlayLike(packageName = pkg, dumpsysPackageOutput = dump))
     }
 }
+
