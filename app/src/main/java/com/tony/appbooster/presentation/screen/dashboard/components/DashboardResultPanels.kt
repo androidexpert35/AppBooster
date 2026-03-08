@@ -23,7 +23,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DoNotDisturbOn
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.RocketLaunch
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +65,8 @@ import com.tony.appbooster.presentation.ui.theme.AppBoosterTheme
  * @param onDismiss Callback invoked when the user dismisses the result panel.
  * @param onRunAgain Callback invoked when the user requests another optimization
  *   run. Unused for [HeroCardStatus.AllOptimized].
+ * @param onForceOptimize Callback invoked when the user requests a forced
+ *   re-optimization of all apps regardless of current status.
  */
 @Composable
 fun HeroResultPanel(
@@ -70,6 +74,7 @@ fun HeroResultPanel(
     modifier: Modifier = Modifier,
     onDismiss: () -> Unit,
     onRunAgain: () -> Unit = {},
+    onForceOptimize: () -> Unit = {},
 ) {
     // Derive visual tokens from the status variant
     val config = rememberHeroResultConfig(status)
@@ -214,34 +219,110 @@ fun HeroResultPanel(
         Spacer(Modifier.height(18.dp))
 
         // ── Action buttons ─────────────────────────────────────────────────
-        if (config.showRunAgain) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                FilledTonalButton(
-                    onClick = onRunAgain,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp)
+        when {
+            // AllOptimized: Force re-optimize is the main CTA
+            config.showGlow -> {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                    Text(
+                        text = stringResource(R.string.analysis_all_optimized_force_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
                     )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.action_run_again))
-                }
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.CenterVertically)
-                ) {
-                    Text(stringResource(R.string.action_dismiss))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = onForceOptimize,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.RocketLaunch,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.action_force_optimize_short),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        TextButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.align(Alignment.CenterVertically)
+                        ) {
+                            Text(stringResource(R.string.action_dismiss))
+                        }
+                    }
                 }
             }
-        } else {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.action_dismiss))
+
+            // Completed/Canceled: Run again is primary, force is a subtle link
+            config.showRunAgain -> {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = onRunAgain,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.action_run_again))
+                        }
+                        TextButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.align(Alignment.CenterVertically)
+                        ) {
+                            Text(stringResource(R.string.action_dismiss))
+                        }
+                    }
+
+                    TextButton(onClick = onForceOptimize) {
+                        Icon(
+                            imageVector = Icons.Rounded.RocketLaunch,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.action_force_optimize),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                }
+            }
+
+            // Fallback: dismiss only
+            else -> {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.action_dismiss))
+                }
             }
         }
     }
@@ -343,7 +424,8 @@ private fun HeroResultPanelCompletedPreview() {
         HeroResultPanel(
             status = HeroCardStatus.Completed(processedCount = 18, skippedCount = 4, totalCount = 22),
             onDismiss = {},
-            onRunAgain = {}
+            onRunAgain = {},
+            onForceOptimize = {}
         )
     }
 }
@@ -356,7 +438,8 @@ private fun HeroResultPanelCanceledPreview() {
         HeroResultPanel(
             status = HeroCardStatus.Canceled(processedCount = 7, skippedCount = 2, totalCount = 22),
             onDismiss = {},
-            onRunAgain = {}
+            onRunAgain = {},
+            onForceOptimize = {}
         )
     }
 }
@@ -368,7 +451,8 @@ private fun HeroResultPanelAllOptimizedPreview() {
     AppBoosterTheme {
         HeroResultPanel(
             status = HeroCardStatus.AllOptimized(optimizedCount = 22, noProfileCount = 3),
-            onDismiss = {}
+            onDismiss = {},
+            onForceOptimize = {}
         )
     }
 }

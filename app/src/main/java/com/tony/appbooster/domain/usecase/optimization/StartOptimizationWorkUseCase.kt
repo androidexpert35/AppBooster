@@ -20,10 +20,15 @@ class StartOptimizationWorkUseCase(
      * Enqueues optimization as unique work.
      *
      * @param mode Optimization mode to execute.
+     * @param forceOptimize When true, compiles every installed package
+     *        regardless of its current compilation status.
      * @return [Resource.Success] when the request is enqueued.
      */
-    operator fun invoke(mode: AppOptimizationType): Resource<Unit> {
-        scheduler.enqueue(mode)
+    operator fun invoke(
+        mode: AppOptimizationType,
+        forceOptimize: Boolean = false
+    ): Resource<Unit> {
+        scheduler.enqueue(mode, forceOptimize)
         return Resource.Success(Unit)
     }
 }

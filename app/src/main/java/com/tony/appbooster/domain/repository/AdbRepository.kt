@@ -84,10 +84,15 @@ interface AdbRepository {
      * platform dexopt tooling over an established ADB connection.
      *
      * @param mode Optimization strategy that maps to the compile mode.
+     * @param forceOptimize When true, bypasses the analysis cache and skip
+     *        logic, compiling every installed package regardless of its
+     *        current compilation status. Useful after OTA updates when apps
+     *        fall back to "verify" but the system hasn't re-profiled them yet.
      * @return [Resource] indicating whether the optimization run succeeded.
      */
     suspend fun executeOptimizationCommand(
-        mode: AppOptimizationType
+        mode: AppOptimizationType,
+        forceOptimize: Boolean = false
     ): Resource<Unit>
 
     /**

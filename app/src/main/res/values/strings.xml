@@ -60,6 +60,8 @@
     <string name="action_start">Start</string>
     <string name="action_stop">Stop</string>
     <string name="action_run_again">Run again</string>
+    <string name="action_force_optimize">Force re-optimize all</string>
+    <string name="action_force_optimize_short">Re-optimize all</string>
     <string name="action_dismiss">Dismiss</string>
 
     <!-- Notification permission rationale -->
@@ -206,6 +208,7 @@
     <string name="analysis_apps_already_optimized">%1$d apps already optimized</string>
     <string name="analysis_all_optimized_title">All Apps Optimized!</string>
     <string name="analysis_all_optimized_subtitle">Your device is already running at peak performance</string>
+    <string name="analysis_all_optimized_force_hint">Updated your OS? Force re-optimize to restore peak speed</string>
     <string name="analysis_last_optimized">Optimized %1$d days ago</string>
     <string name="analysis_never_optimized">Never optimized</string>
     <string name="analysis_recently_updated">Recently updated</string>

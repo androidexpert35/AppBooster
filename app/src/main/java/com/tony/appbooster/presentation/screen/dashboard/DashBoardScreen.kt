@@ -62,6 +62,11 @@ fun DashboardScreen(viewModel: MainViewModel) {
                         viewModel.onEvent(MainUiEvent.OnStartOptimizationClicked)
                     }
                 },
+                onForceOptimize = {
+                    runWithNotificationPermission {
+                        viewModel.onEvent(MainUiEvent.OnForceOptimizationClicked)
+                    }
+                },
                 onStopOptimization = { viewModel.onEvent(MainUiEvent.OnStopOptimizationClicked) },
                 onDismissResult = { viewModel.onEvent(MainUiEvent.OnDismissOptimizationResultClicked) },
                 onAnalyze = { viewModel.onEvent(MainUiEvent.OnAnalyzeAppsClicked) },
@@ -77,6 +82,7 @@ fun DashboardScreen(viewModel: MainViewModel) {
 private fun DashboardContent(
     model: MainUiModel,
     onStartOptimization: () -> Unit,
+    onForceOptimize: () -> Unit,
     onStopOptimization: () -> Unit,
     onDismissResult: () -> Unit,
     onAnalyze: () -> Unit,
@@ -120,6 +126,7 @@ private fun DashboardContent(
             DashboardHeroCard(
                 model = model,
                 onStartOptimization = onStartOptimization,
+                onForceOptimize = onForceOptimize,
                 onStopOptimization = onStopOptimization,
                 onDismissResult = onDismissResult,
                 onAnalyze = onAnalyze,

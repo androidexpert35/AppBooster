@@ -23,11 +23,16 @@ class StartOptimizationUseCase(
      * Starts optimization for the given mode.
      *
      * @param mode Optimization mode to execute.
+     * @param forceOptimize When true, compiles every installed package
+     *        regardless of its current compilation status.
      * @return [Resource.Success] when work is scheduled, [Resource.Error] otherwise.
      */
-    suspend operator fun invoke(mode: AppOptimizationType): Resource<Unit> {
+    suspend operator fun invoke(
+        mode: AppOptimizationType,
+        forceOptimize: Boolean = false
+    ): Resource<Unit> {
         return when (val connection = connectAdbUseCase()) {
-            is Resource.Success -> startOptimizationWorkUseCase(mode)
+            is Resource.Success -> startOptimizationWorkUseCase(mode, forceOptimize)
             is Resource.Error -> connection
         }
     }

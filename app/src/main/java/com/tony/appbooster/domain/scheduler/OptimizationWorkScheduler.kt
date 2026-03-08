@@ -15,8 +15,10 @@ interface OptimizationWorkScheduler {
      * Enqueues a unique optimization run.
      *
      * @param mode Optimization mode to execute.
+     * @param forceOptimize When true, compiles every installed package
+     *        regardless of its current compilation status.
      */
-    fun enqueue(mode: AppOptimizationType)
+    fun enqueue(mode: AppOptimizationType, forceOptimize: Boolean = false)
 
     /**
      * Cancels the currently running optimization work, if any.

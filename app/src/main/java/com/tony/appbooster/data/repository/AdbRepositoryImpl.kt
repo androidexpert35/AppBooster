@@ -169,12 +169,15 @@ class AdbRepositoryImpl @Inject constructor(
      *         or [Resource.Error] describing the failure.
      */
     override suspend fun executeOptimizationCommand(
-        mode: AppOptimizationType
+        mode: AppOptimizationType,
+        forceOptimize: Boolean
     ): Resource<Unit> {
         val compileMode = mode.value
         return runCatching {
             resetForNewRun()
-            logger.addLogEntry(LogEntryType.START, "Starting optimization", detail = "Mode: $compileMode")
+            val forceLabel = if (forceOptimize) " (Force)" else ""
+            logger.addLogEntry(LogEntryType.START, "Starting optimization",
+                detail = "Mode: $compileMode$forceLabel")
 
             val allPackages = packageQuery.queryInstalledPackages()
             if (allPackages.isEmpty()) {
@@ -184,7 +187,21 @@ class AdbRepositoryImpl @Inject constructor(
             }
             logger.addLog("Found ${allPackages.size} installed packages.")
 
-            val (packagesToOptimize, skippedCount) = resolvePackagesToOptimize(mode, allPackages)
+            val packagesToOptimize: List<String>
+            val skippedCount: Int
+
+            if (forceOptimize) {
+                // Force mode: compile every package, skip nothing
+                packagesToOptimize = allPackages
+                skippedCount = 0
+                logger.addLog("Force mode enabled — all ${allPackages.size} packages will be compiled.")
+                logger.addLogEntry(LogEntryType.INFO, "Force mode",
+                    detail = "Bypassing analysis — compiling all apps")
+            } else {
+                val (resolved, skipped) = resolvePackagesToOptimize(mode, allPackages)
+                packagesToOptimize = resolved
+                skippedCount = skipped
+            }
 
             if (packagesToOptimize.isEmpty()) {
                 handleAllAlreadyOptimized(skippedCount)

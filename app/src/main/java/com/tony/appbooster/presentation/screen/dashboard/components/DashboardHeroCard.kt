@@ -73,6 +73,7 @@ import com.tony.appbooster.presentation.viewmodel.main.MainUiModel
  *
  * @param model Current dashboard state.
  * @param onStartOptimization User intent: start optimization.
+ * @param onForceOptimize User intent: force re-optimize all apps regardless of status.
  * @param onStopOptimization User intent: cancel optimization.
  * @param onDismissResult User intent: dismiss the result banner.
  * @param onAnalyze User intent: start analysis.
@@ -82,6 +83,7 @@ import com.tony.appbooster.presentation.viewmodel.main.MainUiModel
 fun DashboardHeroCard(
     model: MainUiModel,
     onStartOptimization: () -> Unit,
+    onForceOptimize: () -> Unit,
     onStopOptimization: () -> Unit,
     onDismissResult: () -> Unit,
     onAnalyze: () -> Unit,
@@ -190,7 +192,8 @@ fun DashboardHeroCard(
                                 noProfileCount = model.optimizationAnalysis.appsWithNoProfile,
                                 optimizationMode = model.optimizationMode
                             ),
-                            onDismiss = onDismissResult
+                            onDismiss = onDismissResult,
+                            onForceOptimize = onForceOptimize
                         )
                     }
 
@@ -204,7 +207,8 @@ fun DashboardHeroCard(
                                 optimizationMode = model.optimizationMode
                             ),
                             onDismiss = onDismissResult,
-                            onRunAgain = onStartOptimization
+                            onRunAgain = onStartOptimization,
+                            onForceOptimize = onForceOptimize
                         )
                     }
 
@@ -218,7 +222,8 @@ fun DashboardHeroCard(
                                 optimizationMode = model.optimizationMode
                             ),
                             onDismiss = onDismissResult,
-                            onRunAgain = onStartOptimization
+                            onRunAgain = onStartOptimization,
+                            onForceOptimize = onForceOptimize
                         )
                     }
 
@@ -437,4 +442,3 @@ private enum class HeroPhase {
     RESULT_CANCELED,
     ALL_OPTIMIZED
 }
-

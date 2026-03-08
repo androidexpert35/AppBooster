@@ -18,8 +18,8 @@ class WorkManagerOptimizationWorkScheduler @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) : OptimizationWorkScheduler {
 
-    override fun enqueue(mode: AppOptimizationType) {
-        OptimizationWorker.enqueue(context, mode)
+    override fun enqueue(mode: AppOptimizationType, forceOptimize: Boolean) {
+        OptimizationWorker.enqueue(context, mode, forceOptimize)
     }
 
     override fun cancel() {

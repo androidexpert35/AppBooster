@@ -160,7 +160,8 @@ class MainViewModel @Inject constructor(
     override fun handleEvent(event: MainUiEvent) {
         when (event) {
             MainUiEvent.OnConnectClicked -> startConnectionSequence()
-            MainUiEvent.OnStartOptimizationClicked -> onStartOptimizationRequested()
+            MainUiEvent.OnStartOptimizationClicked -> onStartOptimizationRequested(forceOptimize = false)
+            MainUiEvent.OnForceOptimizationClicked -> onStartOptimizationRequested(forceOptimize = true)
             MainUiEvent.OnStopOptimizationClicked -> onStopOptimizationRequested()
             MainUiEvent.OnDismissOptimizationResultClicked -> onDismissOptimizationResultRequested()
             MainUiEvent.OnAnalyzeAppsClicked -> triggerAnalysis()
@@ -193,7 +194,7 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    private fun onStartOptimizationRequested() {
+    private fun onStartOptimizationRequested(forceOptimize: Boolean = false) {
         val optimizationMode = uiState.value.data?.optimizationMode
         if (optimizationMode == null) {
             emitEffect(
@@ -207,7 +208,7 @@ class MainViewModel @Inject constructor(
         isStartingOptimization.value = true
 
         launchUiStateUpdate(
-            dataFetchBlock = { startOptimizationUseCase(optimizationMode) },
+            dataFetchBlock = { startOptimizationUseCase(optimizationMode, forceOptimize) },
             skipLoading = true,
             processSuccess = { uiState.value.data ?: MainUiModel() },
             updateUiAfterError = { uiError ->

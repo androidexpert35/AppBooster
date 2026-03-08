@@ -20,6 +20,13 @@ sealed interface MainUiEvent {
     data object OnStartOptimizationClicked : MainUiEvent
 
     /**
+     * Requests starting a forced optimization that compiles every installed
+     * package regardless of its current compilation status. Useful after
+     * OTA updates or when the user wants to re-optimise all apps.
+     */
+    data object OnForceOptimizationClicked : MainUiEvent
+
+    /**
      * Requests stopping the current optimization workflow.
      */
     data object OnStopOptimizationClicked : MainUiEvent

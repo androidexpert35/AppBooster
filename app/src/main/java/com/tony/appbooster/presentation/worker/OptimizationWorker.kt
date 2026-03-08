@@ -47,6 +47,7 @@ class OptimizationWorker @AssistedInject constructor(
             ?: return@coroutineScope Result.failure()
 
         val mode = parseOptimizationMode(optimizationModeRaw) ?: return@coroutineScope Result.failure()
+        val forceOptimize = inputData.getBoolean(KEY_FORCE_OPTIMIZE, false)
 
         WorkForegroundNotificationHelper.ensureChannel(applicationContext)
 
@@ -95,7 +96,7 @@ class OptimizationWorker @AssistedInject constructor(
                 return@coroutineScope Result.success()
             }
 
-            when (optimizeAppUseCase(mode)) {
+            when (optimizeAppUseCase(mode, forceOptimize)) {
                 is Resource.Success -> Result.success()
                 is Resource.Error -> Result.failure()
             }
@@ -118,17 +119,23 @@ class OptimizationWorker @AssistedInject constructor(
 
     companion object {
         const val KEY_OPTIMIZATION_MODE = "optimization_mode"
+        const val KEY_FORCE_OPTIMIZE = "force_optimize"
 
         /**
          * Enqueues a unique optimization worker.
          *
          * @param context Context used to enqueue work.
          * @param mode Optimization mode to run.
+         * @param forceOptimize When true, compiles every package regardless
+         *        of current compilation status.
          */
-        fun enqueue(context: Context, mode: AppOptimizationType) {
+        fun enqueue(context: Context, mode: AppOptimizationType, forceOptimize: Boolean = false) {
             val request = androidx.work.OneTimeWorkRequestBuilder<OptimizationWorker>()
                 .setInputData(
-                    androidx.work.workDataOf(KEY_OPTIMIZATION_MODE to mode.value)
+                    androidx.work.workDataOf(
+                        KEY_OPTIMIZATION_MODE to mode.value,
+                        KEY_FORCE_OPTIMIZE to forceOptimize
+                    )
                 )
                 .addTag(TAG)
                 .build()
