@@ -37,7 +37,7 @@ android {
         // ── Versioning (single source of truth) ──
         // Bump these three values for each release; versionCode is derived automatically.
         val major = 1
-        val minor = 5
+        val minor = 6
         val patch = 0
         versionCode = major * 10000 + minor * 100 + patch   // e.g. 1.2.3 → 10203
         versionName = "$major.$minor.$patch"
