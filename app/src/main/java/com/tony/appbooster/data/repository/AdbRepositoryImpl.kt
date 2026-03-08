@@ -227,7 +227,7 @@ class AdbRepositoryImpl @Inject constructor(
             // Guard: never overwrite a cancellation with "Completed"
             if (wasCancelled()) return@runCatching
 
-            finaliseCompletion(allPackages.size, total, mode)
+            finaliseCompletion(allPackages.size, total, skippedCount, mode)
         }.fold(
             onSuccess = { Resource.Success(Unit) },
             onFailure = { throwable ->
@@ -465,6 +465,7 @@ class AdbRepositoryImpl @Inject constructor(
     private fun finaliseCompletion(
         totalInstalled: Int,
         optimisedCount: Int,
+        skippedCount: Int,
         mode: AppOptimizationType
     ) {
         logger.addLog("✓ Optimization complete! $optimisedCount apps optimized.")
@@ -474,8 +475,9 @@ class AdbRepositoryImpl @Inject constructor(
         val prevAnalysis = _optimizationAnalysis.value
         _optimizationAnalysis.value = OptimizationAnalysis(
             totalAppsScanned = totalInstalled,
+            // freshly compiled this run + apps that were already optimal (skipped)
             appsNeedingOptimization = 0,
-            appsAlreadyOptimized = prevAnalysis.appsAlreadyOptimized + optimisedCount,
+            appsAlreadyOptimized = optimisedCount + skippedCount,
             appsWithNoProfile = prevAnalysis.appsWithNoProfile,
             isScanning = false,
             lastScanTimeMs = System.currentTimeMillis(),
