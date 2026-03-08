@@ -54,11 +54,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
+import com.tony.appbooster.R
 import com.tony.appbooster.domain.model.common.LogEntryType
+import com.tony.appbooster.domain.model.common.LogMessageKey
 import com.tony.appbooster.domain.model.common.OptimizationLogEntry
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -125,7 +128,7 @@ fun OptimizationActivityFeed(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "Activity",
+                    text = stringResource(R.string.activity_feed_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -196,13 +199,13 @@ private fun EmptyFeedState(isExpanded: Boolean) {
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                text = "Ready to optimize",
+                text = stringResource(R.string.activity_feed_empty_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "Tap Start to begin",
+                text = stringResource(R.string.activity_feed_empty_subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
             )
@@ -237,6 +240,7 @@ private fun ActivityLogItem(entry: OptimizationLogEntry) {
         }
     }
 
+    val resolvedMessage = entry.messageKey?.let { resolveLogMessageKey(it) } ?: entry.message
     val style = remember(entry.type) { resolveLogEntryStyle(entry.type) }
     val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
     val isAppEntry = entry.packageName != null
@@ -289,7 +293,7 @@ private fun ActivityLogItem(entry: OptimizationLogEntry) {
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = entry.message,
+                text = resolvedMessage,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -310,7 +314,7 @@ private fun ActivityLogItem(entry: OptimizationLogEntry) {
         if (isSuccess) {
             Icon(
                 imageVector = Icons.Rounded.CheckCircle,
-                contentDescription = "Optimized",
+                contentDescription = stringResource(R.string.activity_feed_optimized_cd),
                 modifier = Modifier.size(20.dp),
                 tint = Color(0xFF4CAF50)
             )
@@ -323,6 +327,38 @@ private fun ActivityLogItem(entry: OptimizationLogEntry) {
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         )
     }
+}
+
+/**
+ * Resolves a [LogMessageKey] to a localised string using the current composition context.
+ *
+ * @param key Semantic message key emitted by the data layer.
+ * @return Localised human-readable string for display.
+ */
+@Composable
+private fun resolveLogMessageKey(key: LogMessageKey): String = when (key) {
+    LogMessageKey.OPTIMIZATION_CANCELLED -> stringResource(R.string.log_optimization_cancelled)
+    LogMessageKey.ANALYSIS_CANCELLED -> stringResource(R.string.log_analysis_cancelled)
+    LogMessageKey.STARTING_OPTIMIZATION -> stringResource(R.string.log_starting_optimization)
+    LogMessageKey.NO_PACKAGES_FOUND -> stringResource(R.string.log_no_packages_found)
+    LogMessageKey.FORCE_MODE -> stringResource(R.string.log_force_mode)
+    LogMessageKey.OPTIMIZING_APP -> stringResource(R.string.log_optimizing_app)
+    LogMessageKey.OPTIMIZED -> stringResource(R.string.log_optimized)
+    LogMessageKey.OPTIMIZATION_FAILED_APP -> stringResource(R.string.log_optimization_failed_app)
+    LogMessageKey.OPTIMIZATION_FAILED -> stringResource(R.string.log_optimization_failed)
+    LogMessageKey.OPTIMIZATION_COMPLETE -> stringResource(R.string.log_optimization_complete)
+    LogMessageKey.ALL_APPS_OPTIMIZED -> stringResource(R.string.log_all_apps_optimized)
+    LogMessageKey.USING_CACHED_ANALYSIS -> stringResource(R.string.log_using_cached_analysis)
+    LogMessageKey.STARTING_ANALYSIS -> stringResource(R.string.log_starting_analysis)
+    LogMessageKey.FOUND_APPS -> stringResource(R.string.log_found_apps)
+    LogMessageKey.ANALYZING_APPS -> stringResource(R.string.log_analyzing_apps)
+    LogMessageKey.ANALYSIS_FAILED -> stringResource(R.string.log_analysis_failed)
+    LogMessageKey.ANALYSIS_COMPLETE -> stringResource(R.string.log_analysis_complete)
+    LogMessageKey.NEEDS_OPTIMIZATION -> stringResource(R.string.log_needs_optimization)
+    LogMessageKey.ALREADY_OPTIMIZED -> stringResource(R.string.log_already_optimized)
+    LogMessageKey.OPTIMAL -> stringResource(R.string.log_optimal)
+    LogMessageKey.NO_PROFILE_NEVER_USED -> stringResource(R.string.log_no_profile_never_used)
+    LogMessageKey.MODE_INFO -> stringResource(R.string.log_mode_info)
 }
 
 /**

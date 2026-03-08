@@ -2,6 +2,7 @@ package com.tony.appbooster.data.util
 
 import com.tony.appbooster.data.util.OptimizationLogger.Companion.MAX_LOG_ENTRIES
 import com.tony.appbooster.domain.model.common.LogEntryType
+import com.tony.appbooster.domain.model.common.LogMessageKey
 import com.tony.appbooster.domain.model.common.OptimizationLogEntry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -57,7 +58,8 @@ class OptimizationLogger @Inject constructor() {
      */
     fun addLogEntry(
         type: LogEntryType,
-        message: String,
+        message: String = "",
+        messageKey: LogMessageKey? = null,
         packageName: String? = null,
         detail: String? = null
     ) {
@@ -66,6 +68,7 @@ class OptimizationLogger @Inject constructor() {
             timestamp = System.currentTimeMillis(),
             type = type,
             packageName = packageName,
+            messageKey = messageKey,
             message = message,
             detail = detail
         )

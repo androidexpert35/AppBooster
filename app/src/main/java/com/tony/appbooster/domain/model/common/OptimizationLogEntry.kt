@@ -8,7 +8,9 @@ package com.tony.appbooster.domain.model.common
  * @property timestamp When this entry was created.
  * @property type The type of log entry for styling.
  * @property packageName Package name if this entry relates to a specific app.
- * @property message Human-readable message.
+ * @property messageKey Semantic key resolved to a localized string at the presentation layer.
+ *   When null, [message] is displayed as-is (fallback for dynamic or untranslatable content).
+ * @property message Human-readable fallback message used when [messageKey] is null.
  * @property detail Optional additional detail text.
  */
 data class OptimizationLogEntry(
@@ -16,7 +18,8 @@ data class OptimizationLogEntry(
     val timestamp: Long = System.currentTimeMillis(),
     val type: LogEntryType,
     val packageName: String? = null,
-    val message: String,
+    val messageKey: LogMessageKey? = null,
+    val message: String = "",
     val detail: String? = null
 )
 
@@ -47,3 +50,35 @@ enum class LogEntryType {
     /** App has no runtime profile (never used by the user) */
     NO_PROFILE
 }
+
+/**
+ * Semantic message keys for structured log entries that require localisation.
+ *
+ * Each variant maps to a string resource in the presentation layer so the
+ * data layer remains free of Android `Context` dependencies.
+ */
+enum class LogMessageKey {
+    OPTIMIZATION_CANCELLED,
+    ANALYSIS_CANCELLED,
+    STARTING_OPTIMIZATION,
+    NO_PACKAGES_FOUND,
+    FORCE_MODE,
+    OPTIMIZING_APP,
+    OPTIMIZED,
+    OPTIMIZATION_FAILED_APP,
+    OPTIMIZATION_FAILED,
+    OPTIMIZATION_COMPLETE,
+    ALL_APPS_OPTIMIZED,
+    USING_CACHED_ANALYSIS,
+    STARTING_ANALYSIS,
+    FOUND_APPS,
+    ANALYZING_APPS,
+    ANALYSIS_FAILED,
+    ANALYSIS_COMPLETE,
+    NEEDS_OPTIMIZATION,
+    ALREADY_OPTIMIZED,
+    OPTIMAL,
+    NO_PROFILE_NEVER_USED,
+    MODE_INFO,
+}
+

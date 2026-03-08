@@ -218,4 +218,34 @@
     <string name="analysis_card_optimized">Optimized</string>
     <string name="analysis_card_no_profile">No Profile</string>
     <string name="analysis_view_details">View Details</string>
+
+    <!-- Activity feed UI -->
+    <string name="activity_feed_title">Activity</string>
+    <string name="activity_feed_empty_title">Ready to optimize</string>
+    <string name="activity_feed_empty_subtitle">Tap Start to begin</string>
+    <string name="activity_feed_optimized_cd">Optimized</string>
+
+    <!-- Log messages (resolved from LogMessageKey at the presentation layer) -->
+    <string name="log_optimization_cancelled">Optimization cancelled</string>
+    <string name="log_analysis_cancelled">Analysis cancelled</string>
+    <string name="log_starting_optimization">Starting optimization</string>
+    <string name="log_no_packages_found">No packages found</string>
+    <string name="log_force_mode">Force mode</string>
+    <string name="log_optimizing_app">Optimizing…</string>
+    <string name="log_optimized">Optimized</string>
+    <string name="log_optimization_failed_app">Failed</string>
+    <string name="log_optimization_failed">Optimization failed</string>
+    <string name="log_optimization_complete">Optimization complete!</string>
+    <string name="log_all_apps_optimized">All apps optimized!</string>
+    <string name="log_using_cached_analysis">Using cached analysis</string>
+    <string name="log_starting_analysis">Starting analysis</string>
+    <string name="log_found_apps">Found apps</string>
+    <string name="log_analyzing_apps">Analyzing apps…</string>
+    <string name="log_analysis_failed">Analysis failed</string>
+    <string name="log_analysis_complete">Analysis complete</string>
+    <string name="log_needs_optimization">Needs optimization</string>
+    <string name="log_already_optimized">Already optimized</string>
+    <string name="log_optimal">Optimal</string>
+    <string name="log_no_profile_never_used">No profile</string>
+    <string name="log_mode_info">Mode</string>
 </resources>

@@ -5,6 +5,7 @@ import com.tony.appbooster.data.util.OptimizationLogger
 import com.tony.appbooster.data.util.PackageListQueryService
 import com.tony.appbooster.domain.client.AdbShellDataSource
 import com.tony.appbooster.domain.model.common.LogEntryType
+import com.tony.appbooster.domain.model.common.LogMessageKey
 import com.tony.appbooster.domain.model.common.OptimizationAnalysis
 import com.tony.appbooster.domain.model.common.OptimizationProgress
 import com.tony.appbooster.domain.model.common.OptimizationResult
@@ -125,7 +126,7 @@ class AdbRepositoryImpl @Inject constructor(
 
         optimizationCancelRequested.set(true)
         logger.addLog("⏹ Cancelling optimization...")
-        logger.addLogEntry(LogEntryType.CANCELLED, "Optimization cancelled")
+        logger.addLogEntry(LogEntryType.CANCELLED, messageKey = LogMessageKey.OPTIMIZATION_CANCELLED)
     }.fold(
         onSuccess = { Resource.Success(Unit) },
         onFailure = { Resource.Error(ResourceError.LogicError(it.message)) }
@@ -150,7 +151,7 @@ class AdbRepositoryImpl @Inject constructor(
 
         analysisCancelRequested.set(true)
         logger.addLog("⏹ Cancelling analysis...")
-        logger.addLogEntry(LogEntryType.CANCELLED, "Analysis cancelled")
+        logger.addLogEntry(LogEntryType.CANCELLED, messageKey = LogMessageKey.ANALYSIS_CANCELLED)
     }.fold(
         onSuccess = { Resource.Success(Unit) },
         onFailure = { Resource.Error(ResourceError.LogicError(it.message)) }
@@ -176,13 +177,13 @@ class AdbRepositoryImpl @Inject constructor(
         return runCatching {
             resetForNewRun()
             val forceLabel = if (forceOptimize) " (Force)" else ""
-            logger.addLogEntry(LogEntryType.START, "Starting optimization",
+            logger.addLogEntry(LogEntryType.START, messageKey = LogMessageKey.STARTING_OPTIMIZATION,
                 detail = "Mode: $compileMode$forceLabel")
 
             val allPackages = packageQuery.queryInstalledPackages()
             if (allPackages.isEmpty()) {
                 logger.addLog("No packages found for optimization.")
-                logger.addLogEntry(LogEntryType.INFO, "No packages found")
+                logger.addLogEntry(LogEntryType.INFO, messageKey = LogMessageKey.NO_PACKAGES_FOUND)
                 return@runCatching
             }
             logger.addLog("Found ${allPackages.size} installed packages.")
@@ -195,8 +196,8 @@ class AdbRepositoryImpl @Inject constructor(
                 packagesToOptimize = allPackages
                 skippedCount = 0
                 logger.addLog("Force mode enabled — all ${allPackages.size} packages will be compiled.")
-                logger.addLogEntry(LogEntryType.INFO, "Force mode",
-                    detail = "Bypassing analysis — compiling all apps")
+                logger.addLogEntry(LogEntryType.INFO, messageKey = LogMessageKey.FORCE_MODE,
+                    detail = "${allPackages.size} apps")
             } else {
                 val (resolved, skipped) = resolvePackagesToOptimize(mode, allPackages)
                 packagesToOptimize = resolved
@@ -232,7 +233,7 @@ class AdbRepositoryImpl @Inject constructor(
             onSuccess = { Resource.Success(Unit) },
             onFailure = { throwable ->
                 logger.addLog("Optimization failed: ${throwable.message}")
-                logger.addLogEntry(LogEntryType.ERROR, "Optimization failed", detail = throwable.message)
+                logger.addLogEntry(LogEntryType.ERROR, messageKey = LogMessageKey.OPTIMIZATION_FAILED, detail = throwable.message)
                 _optimizationProgress.value = _optimizationProgress.value.copy(isRunning = false)
                 Resource.Error(
                     ResourceError.LogicError(
@@ -266,23 +267,23 @@ class AdbRepositoryImpl @Inject constructor(
         compilationResolver.resetCaches()
 
         _optimizationAnalysis.value = _optimizationAnalysis.value.copy(isScanning = true)
-        logger.addLogEntry(LogEntryType.START, "Starting analysis", detail = "Checking optimization status")
+        logger.addLogEntry(LogEntryType.START, messageKey = LogMessageKey.STARTING_ANALYSIS)
 
         val allPackages = packageQuery.queryInstalledPackages()
         if (allPackages.isEmpty()) {
-            logger.addLogEntry(LogEntryType.INFO, "No packages found")
+            logger.addLogEntry(LogEntryType.INFO, messageKey = LogMessageKey.NO_PACKAGES_FOUND)
             return@runCatching emptyAnalysisResult(mode)
         }
 
-        logger.addLogEntry(LogEntryType.ANALYZING, "Found ${allPackages.size} apps",
-            detail = "Checking each app...")
+        logger.addLogEntry(LogEntryType.ANALYZING, messageKey = LogMessageKey.FOUND_APPS,
+            detail = "${allPackages.size} apps")
 
         performAnalysisScan(allPackages, mode)
     }.fold(
         onSuccess = { Resource.Success(it) },
         onFailure = { throwable ->
             _optimizationAnalysis.value = _optimizationAnalysis.value.copy(isScanning = false)
-            logger.addLogEntry(LogEntryType.ERROR, "Analysis failed", detail = throwable.message)
+            logger.addLogEntry(LogEntryType.ERROR, messageKey = LogMessageKey.ANALYSIS_FAILED, detail = throwable.message)
             Resource.Error(
                 ResourceError.LogicError(
                     errorMessage = "Analysis failed: ${throwable.message}",
@@ -338,15 +339,15 @@ class AdbRepositoryImpl @Inject constructor(
 
         if (analysisIsValid) {
             logger.addLog("Using existing analysis from this session")
-            logger.addLogEntry(LogEntryType.INFO, "Using cached analysis",
-                detail = "${existing.appsNeedingOptimization} apps need optimization")
+            logger.addLogEntry(LogEntryType.INFO, messageKey = LogMessageKey.USING_CACHED_ANALYSIS,
+                detail = "${existing.appsNeedingOptimization} apps")
             return existing.packagesNeedingOptimization to
                 (existing.appsAlreadyOptimized + existing.appsWithNoProfile)
         }
 
         logger.addLog("Analyzing optimization status...")
-        logger.addLogEntry(LogEntryType.ANALYZING, "Analyzing apps...",
-            detail = "Checking ${allPackages.size} apps")
+        logger.addLogEntry(LogEntryType.ANALYZING, messageKey = LogMessageKey.ANALYZING_APPS,
+            detail = "${allPackages.size} apps")
 
         return when (val result = analyzeOptimizationStatus(mode)) {
             is Resource.Success -> {
@@ -371,8 +372,8 @@ class AdbRepositoryImpl @Inject constructor(
     private fun handleAllAlreadyOptimized(skippedCount: Int) {
         logger.addLog("✓ All apps are already optimized ($skippedCount apps skipped).")
         logger.addLog("No optimization needed at this time.")
-        logger.addLogEntry(LogEntryType.COMPLETE, "All apps optimized!",
-            detail = "$skippedCount apps already optimal")
+        logger.addLogEntry(LogEntryType.COMPLETE, messageKey = LogMessageKey.ALL_APPS_OPTIMIZED,
+            detail = "$skippedCount apps")
 
         _optimizationProgress.value = OptimizationProgress(
             runId = System.currentTimeMillis(),
@@ -388,8 +389,8 @@ class AdbRepositoryImpl @Inject constructor(
         logger.addLog("Optimizing $total apps ($skippedCount already optimized, skipped).")
         logger.addLog("(Excluding ${PackageListQueryService.SELF_PACKAGE_NAME} to prevent self-crash)")
         logger.addLog("Starting compilation (Mode: $compileMode)...")
-        logger.addLogEntry(LogEntryType.INFO, "Mode: $compileMode",
-            detail = "$total to optimize, $skippedCount skipped")
+        logger.addLogEntry(LogEntryType.INFO, messageKey = LogMessageKey.MODE_INFO,
+            detail = "$compileMode — $total / $skippedCount")
     }
 
     /**
@@ -407,7 +408,7 @@ class AdbRepositoryImpl @Inject constructor(
             _optimizationProgress.value = _optimizationProgress.value.copy(
                 currentAppPackage = packageName
             )
-            logger.addLogEntry(LogEntryType.OPTIMIZING, "Optimizing...", packageName = packageName)
+            logger.addLogEntry(LogEntryType.OPTIMIZING, messageKey = LogMessageKey.OPTIMIZING_APP, packageName = packageName)
 
             val command = "cmd package compile -m $compileMode -f $packageName"
             logger.addLog("> $command")
@@ -415,7 +416,7 @@ class AdbRepositoryImpl @Inject constructor(
             shellDataSource.executeCommand(command).fold(
                 onSuccess = { output ->
                     logger.addLog("Success: optimized $packageName")
-                    logger.addLogEntry(LogEntryType.SUCCESS, "Optimized", packageName = packageName)
+                    logger.addLogEntry(LogEntryType.SUCCESS, messageKey = LogMessageKey.OPTIMIZED, packageName = packageName)
                     compilationResolver.markOptimized(packageName)
                     val trimmed = output.trim()
                     if (trimmed.isNotBlank() && !trimmed.equals("Success", ignoreCase = true)) {
@@ -424,7 +425,7 @@ class AdbRepositoryImpl @Inject constructor(
                 },
                 onFailure = { throwable ->
                     logger.addLog("Failure: $packageName - ${throwable.message}")
-                    logger.addLogEntry(LogEntryType.ERROR, "Failed",
+                    logger.addLogEntry(LogEntryType.ERROR, messageKey = LogMessageKey.OPTIMIZATION_FAILED_APP,
                         packageName = packageName, detail = throwable.message)
                 }
             )
@@ -446,8 +447,8 @@ class AdbRepositoryImpl @Inject constructor(
         ) return false
 
         logger.addLog("⏹ Optimization cancelled.")
-        logger.addLogEntry(LogEntryType.CANCELLED, "Optimization cancelled",
-            detail = "$completedCount apps completed")
+        logger.addLogEntry(LogEntryType.CANCELLED, messageKey = LogMessageKey.OPTIMIZATION_CANCELLED,
+            detail = "$completedCount apps")
         _optimizationProgress.value = _optimizationProgress.value.copy(
             isRunning = false,
             result = OptimizationResult.Canceled,
@@ -469,8 +470,8 @@ class AdbRepositoryImpl @Inject constructor(
         mode: AppOptimizationType
     ) {
         logger.addLog("✓ Optimization complete! $optimisedCount apps optimized.")
-        logger.addLogEntry(LogEntryType.COMPLETE, "Optimization complete!",
-            detail = "$optimisedCount apps optimized")
+        logger.addLogEntry(LogEntryType.COMPLETE, messageKey = LogMessageKey.OPTIMIZATION_COMPLETE,
+            detail = "$optimisedCount apps")
 
         val prevAnalysis = _optimizationAnalysis.value
         _optimizationAnalysis.value = OptimizationAnalysis(
@@ -542,16 +543,16 @@ class AdbRepositoryImpl @Inject constructor(
             if (info.needsOptimization) {
                 needsOptimization++
                 packagesNeedingList.add(packageName)
-                logger.addLogEntry(LogEntryType.INFO, "Needs optimization",
+                logger.addLogEntry(LogEntryType.INFO, messageKey = LogMessageKey.NEEDS_OPTIMIZATION,
                     packageName = packageName,
-                    detail = info.compilerFilter?.let { "Current: $it" } ?: "Not compiled")
+                    detail = info.compilerFilter?.let { "Current: $it" })
             } else {
-                classifySkippedPackage(info).let { (logType, reason) ->
+                classifySkippedPackage(info).let { (logType, key, filterDetail) ->
                     when (logType) {
                         LogEntryType.NO_PROFILE -> noProfile++
                         else -> alreadyOptimized++
                     }
-                    logger.addLogEntry(logType, reason, packageName = packageName)
+                    logger.addLogEntry(logType, messageKey = key, packageName = packageName, detail = filterDetail)
                 }
             }
 
@@ -578,28 +579,28 @@ class AdbRepositoryImpl @Inject constructor(
         _optimizationAnalysis.value = result
 
         val noProfileSuffix = if (noProfile > 0) ", $noProfile no profile" else ""
-        logger.addLogEntry(LogEntryType.COMPLETE, "Analysis complete",
-            detail = "$needsOptimization need optimization, $alreadyOptimized already optimized$noProfileSuffix")
+        logger.addLogEntry(LogEntryType.COMPLETE, messageKey = LogMessageKey.ANALYSIS_COMPLETE,
+            detail = "$needsOptimization / $alreadyOptimized$noProfileSuffix")
 
         return result
     }
 
     /**
-     * Resolves a user-friendly log type and reason string for a skipped package.
+     * Resolves a log type, message key, and optional filter detail for a skipped package.
      *
      * @param info Compilation info for the skipped package.
-     * @return Pair of (log entry type, human-readable reason).
+     * @return Triple of (log entry type, message key, optional filter detail).
      */
     private fun classifySkippedPackage(
         info: com.tony.appbooster.domain.model.common.AppCompilationInfo
-    ): Pair<LogEntryType, String> = when (val skip = info.skipReason) {
+    ): Triple<LogEntryType, LogMessageKey, String?> = when (val skip = info.skipReason) {
         is com.tony.appbooster.domain.model.common.AppCompilationInfo.SkipReason.RecentlyOptimized ->
-            LogEntryType.SUCCESS to "Optimized (${skip.filter})"
+            Triple(LogEntryType.SUCCESS, LogMessageKey.OPTIMIZED, skip.filter)
         is com.tony.appbooster.domain.model.common.AppCompilationInfo.SkipReason.AlreadyOptimal ->
-            LogEntryType.SUCCESS to "Optimal (${skip.filter})"
+            Triple(LogEntryType.SUCCESS, LogMessageKey.OPTIMAL, skip.filter)
         is com.tony.appbooster.domain.model.common.AppCompilationInfo.SkipReason.NoProfile ->
-            LogEntryType.NO_PROFILE to "No profile (never used)"
+            Triple(LogEntryType.NO_PROFILE, LogMessageKey.NO_PROFILE_NEVER_USED, null)
         else ->
-            LogEntryType.SUCCESS to "Already optimized"
+            Triple(LogEntryType.SUCCESS, LogMessageKey.ALREADY_OPTIMIZED, null)
     }
 }

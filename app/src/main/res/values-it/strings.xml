@@ -170,4 +170,34 @@
     <string name="analysis_card_optimized">Ottimizzato</string>
     <string name="analysis_card_no_profile">Nessun profilo</string>
     <string name="analysis_view_details">Vedi dettagli</string>
+
+    <!-- Feed attività -->
+    <string name="activity_feed_title">Attività</string>
+    <string name="activity_feed_empty_title">Pronto per ottimizzare</string>
+    <string name="activity_feed_empty_subtitle">Tocca Avvia per iniziare</string>
+    <string name="activity_feed_optimized_cd">Ottimizzato</string>
+
+    <!-- Messaggi log -->
+    <string name="log_optimization_cancelled">Ottimizzazione annullata</string>
+    <string name="log_analysis_cancelled">Analisi annullata</string>
+    <string name="log_starting_optimization">Avvio ottimizzazione</string>
+    <string name="log_no_packages_found">Nessun pacchetto trovato</string>
+    <string name="log_force_mode">Modalità forzata</string>
+    <string name="log_optimizing_app">Ottimizzazione…</string>
+    <string name="log_optimized">Ottimizzato</string>
+    <string name="log_optimization_failed_app">Fallito</string>
+    <string name="log_optimization_failed">Ottimizzazione fallita</string>
+    <string name="log_optimization_complete">Ottimizzazione completata!</string>
+    <string name="log_all_apps_optimized">Tutte le app ottimizzate!</string>
+    <string name="log_using_cached_analysis">Analisi dalla cache</string>
+    <string name="log_starting_analysis">Avvio analisi</string>
+    <string name="log_found_apps">App trovate</string>
+    <string name="log_analyzing_apps">Analisi app…</string>
+    <string name="log_analysis_failed">Analisi fallita</string>
+    <string name="log_analysis_complete">Analisi completata</string>
+    <string name="log_needs_optimization">Da ottimizzare</string>
+    <string name="log_already_optimized">Già ottimizzato</string>
+    <string name="log_optimal">Ottimale</string>
+    <string name="log_no_profile_never_used">Nessun profilo</string>
+    <string name="log_mode_info">Modalità</string>
 </resources>
